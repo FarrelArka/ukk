@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -41,19 +42,18 @@ func CreateBooking(c *gin.Context) {
 		return
 	}
 
-	userID, _ := c.Get("user_id")
-
-	// ambil email user
-	var userEmail string
-	err := config.DB.QueryRow(
-		`SELECT email FROM users WHERE id_user = $1`,
-		userID,
-	).Scan(&userEmail)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed get user email"})
+	// ========================
+	// VALIDASI USER
+	// ========================
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
+	// ========================
+	// PARSE TANGGAL
+	// ========================
 	checkIn, err := time.Parse("2006-01-02", req.CheckIn)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid check_in format (YYYY-MM-DD)"})
@@ -66,14 +66,37 @@ func CreateBooking(c *gin.Context) {
 		return
 	}
 
+	durasi := int(checkOut.Sub(checkIn).Hours() / 24)
+	if durasi <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date range"})
+		return
+	}
+
+	// ========================
+	// AMBIL HARGA
+	// ========================
+	var hargaPerMalam float64
+	err = config.DB.QueryRow(
+		`SELECT price FROM unit_detail WHERE unit_id = $1`,
+		req.UnitID,
+	).Scan(&hargaPerMalam)
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unit price not found"})
+		return
+	}
+
+	totalHarga := hargaPerMalam * float64(durasi)
 	invoice := GenerateInvoiceNumber()
 
-	// === INSERT BOOKING ===
+	// ========================
+	// INSERT BOOKING
+	// ========================
 	var bookingID int
 	err = config.DB.QueryRow(`
 		INSERT INTO booking 
-		(user_id, unit_id, check_in, check_out, jumlah_orang, status_booking, invoice_number)
-		VALUES ($1,$2,$3,$4,$5,'pending',$6)
+		(user_id, unit_id, check_in, check_out, jumlah_orang, status_booking, invoice_number, total_price)
+		VALUES ($1,$2,$3,$4,$5,'pending',$6,$7)
 		RETURNING id_booking
 	`,
 		userID,
@@ -82,6 +105,7 @@ func CreateBooking(c *gin.Context) {
 		checkOut,
 		req.JumlahOrang,
 		invoice,
+		totalHarga,
 	).Scan(&bookingID)
 
 	if err != nil {
@@ -89,55 +113,42 @@ func CreateBooking(c *gin.Context) {
 		return
 	}
 
-	// === HITUNG TOTAL HARGA ===
-	var hargaPerMalam int
+	// ========================
+	// AMBIL EMAIL USER
+	// ========================
+	var userEmail string
 	err = config.DB.QueryRow(
-		`SELECT harga_per_malam FROM unit WHERE id_unit = $1`,
-		req.UnitID,
-	).Scan(&hargaPerMalam)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed get unit price"})
-		return
+		`SELECT email FROM users WHERE id_user = $1`,
+		userID,
+	).Scan(&userEmail)
+
+	if err != nil || userEmail == "" {
+		fmt.Println("Gagal ambil email user:", err)
+	} else {
+		body := services.BuildInvoiceEmail(
+			invoice,
+			"Unit Booking",
+			req.CheckIn,
+			req.CheckOut,
+		)
+
+		// kirim async
+		go func() {
+			if err := services.SendEmail(userEmail, "Invoice Booking", body); err != nil {
+				fmt.Println("EMAIL ERROR:", err)
+			}
+		}()
 	}
 
-	durasi := int(checkOut.Sub(checkIn).Hours() / 24)
-	if durasi <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date range"})
-		return
-	}
-
-	totalHarga := hargaPerMalam * durasi
-
-	// === INSERT PAYMENT ===
-	_, err = config.DB.Exec(`
-		INSERT INTO payment 
-		(booking_id, invoice_number, amount, payment_status)
-		VALUES ($1,$2,$3,'unpaid')
-	`, bookingID, invoice, totalHarga)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// =========================
-	// 📧 SEND EMAIL INVOICE
-	// =========================
-	body := services.BuildInvoiceEmail(
-		invoice,
-		"Unit Booking",
-		req.CheckIn,
-		req.CheckOut,
-	)
-
-	go services.SendEmail(userEmail, "Invoice Booking", body) // async
-
+	// ========================
+	// RESPONSE
+	// ========================
 	c.JSON(http.StatusCreated, gin.H{
-		"message":    "booking created",
-		"id_booking": bookingID,
-		"invoice":    invoice,
-		"status":     "pending",
-		"payment":    "unpaid",
+		"message":     "booking created",
+		"id_booking":  bookingID,
+		"invoice":     invoice,
+		"status":      "pending",
+		"total_price": totalHarga,
 	})
 }
 
@@ -352,5 +363,94 @@ func CancelBooking(c *gin.Context) {
 		"message": "booking cancelled",
 		"refund":  "eligible",
 		"payment": "refunded",
+	})
+} // ========================
+// GET BOOKING BY ID (ADMIN)
+// ========================
+
+func GetBookingByID(c *gin.Context) {
+	id := c.Param("id")
+	bookingID, err := strconv.Atoi(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	var data struct {
+		IDBooking     int
+		UserID        int
+		UnitID        int
+		CheckIn       time.Time
+		CheckOut      time.Time
+		JumlahOrang   int
+		Status        string
+		Invoice       string
+		PaymentStatus string
+		Amount        int
+	}
+
+	err = config.DB.QueryRow(`
+		SELECT 
+			b.id_booking, b.user_id, b.unit_id,
+			b.check_in, b.check_out,
+			b.jumlah_orang, b.status_booking,
+			b.invoice_number,
+			p.payment_status, p.amount
+		FROM booking b
+		JOIN payment p ON p.booking_id = b.id_booking
+		WHERE b.id_booking = $1
+	`, bookingID).Scan(
+		&data.IDBooking,
+		&data.UserID,
+		&data.UnitID,
+		&data.CheckIn,
+		&data.CheckOut,
+		&data.JumlahOrang,
+		&data.Status,
+		&data.Invoice,
+		&data.PaymentStatus,
+		&data.Amount,
+	)
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "booking not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, data)
+}
+
+// ========================
+// FORCE DELETE BOOKING (ADMIN)
+// ========================
+
+func ForceDeleteBooking(c *gin.Context) {
+	id := c.Param("id")
+	bookingID, err := strconv.Atoi(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	// hapus payment dulu (karena FK)
+	_, err = config.DB.Exec(`
+		DELETE FROM payment WHERE booking_id = $1
+	`, bookingID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// hapus booking
+	_, err = config.DB.Exec(`
+		DELETE FROM booking WHERE id_booking = $1
+	`, bookingID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "booking permanently deleted",
 	})
 }
