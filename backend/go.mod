@@ -1,4 +1,4 @@
-Pmodule go-backend-basic
+module go-backend-basic
 
 go 1.25.5
 

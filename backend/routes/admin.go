@@ -27,5 +27,12 @@ func AdminRoutes(auth *gin.RouterGroup) {
 		admin.POST("/users/create", handlers.CreateUser)
 		admin.PUT("/users/:id", handlers.UpdateUser)
 		admin.DELETE("/users/:id", handlers.DeleteUser)
+		// =========================
+		// BOOKING MANAGEMENT
+		// =========================
+		admin.GET("/bookings", handlers.GetAllBookings)
+		admin.GET("/bookings/:id", handlers.GetBookingByID) // optional
+		admin.PUT("/bookings/:id/status", handlers.UpdateBookingStatus)
+		admin.DELETE("/bookings/:id", handlers.ForceDeleteBooking) // optional
 	}
 }
