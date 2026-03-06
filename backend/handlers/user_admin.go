@@ -63,9 +63,9 @@ func CreateUser(c *gin.Context) {
 // =====================
 func GetAllUsers(c *gin.Context) {
 	rows, err := config.DB.Query(`
-		SELECT id, name, email, role
+		SELECT id_user, name, email, role
 		FROM users
-		ORDER BY id ASC
+		ORDER BY id_user ASC
 	`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -107,9 +107,9 @@ func GetUserByID(c *gin.Context) {
 
 	var user UserResponse
 	err := config.DB.QueryRow(`
-		SELECT id, name, email, role
+		SELECT id_user, name, email, role
 		FROM users
-		WHERE id = $1
+		WHERE id_user = $1
 	`, id).Scan(&user.ID, &user.Name, &user.Email, &user.Role)
 
 	if err == sql.ErrNoRows {
@@ -158,7 +158,7 @@ func UpdateUser(c *gin.Context) {
 	result, err := config.DB.Exec(`
 		UPDATE users
 		SET name = $1, role = $2
-		WHERE id = $3
+		WHERE id_user = $3
 	`, input.Name, input.Role, id)
 
 	if err != nil {
@@ -189,7 +189,7 @@ func DeleteUser(c *gin.Context) {
 
 	result, err := config.DB.Exec(`
 		DELETE FROM users
-		WHERE id = $1
+		WHERE id_user = $1
 	`, id)
 
 	if err != nil {

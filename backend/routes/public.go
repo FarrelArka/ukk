@@ -16,8 +16,8 @@ func PublicRoutes(r *gin.Engine) {
 	r.GET("/auth/google/callback", handlers.GoogleCallback)
 
 	// USERS (OPTIONAL)
-	r.GET("/users", handlers.GetUsers)
-	r.POST("/users", handlers.CreateUser)
+	// r.GET("/users", handlers.GetUsers)
+	// r.POST("/users", handlers.CreateUser)
 
 	// PUBLIC READ
 	r.GET("/accommodations", handlers.GetUnits)
