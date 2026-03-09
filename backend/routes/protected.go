@@ -21,6 +21,14 @@ func ProtectedRoutes(r *gin.Engine) {
 		auth.GET("/booking/me", handlers.GetMyBookings)
 		auth.PUT("/booking/:id/cancel", handlers.CancelBooking)
 
+		// ========================
+		// TESTIMONIAL (USER)
+		// ========================
+		auth.POST("/testimonial", handlers.CreateTestimonial)
+		auth.GET("/testimonial", handlers.GetTestimonials)
+		auth.GET("/testimonial/:id", handlers.GetTestimonialByID)
+		auth.PUT("/testimonial/:id", handlers.UpdateTestimonial)
+
 		AdminRoutes(auth)
 	}
 }

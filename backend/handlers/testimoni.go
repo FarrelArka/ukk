@@ -6,18 +6,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type Testimonial struct {
-	IDTestimonial int    `json:"id_testimonial"`
-	BookingID     int    `json:"booking_id"`
-	IDUser        int    `json:"id_user"`
-	Rating        int    `json:"rating"`
-	Comment       string `json:"comment"`
-	CreatedAt     string `json:"created_at"`
+type TestimonialRequest struct {
+	BookingID int     `json:"booking_id"`
+	Rating    float64 `json:"rating"`
+	Comment   string  `json:"comment"`
 }
 
 func CreateTestimonial(c *gin.Context) {
 
-	var req Testimonial
+	var req TestimonialRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "invalid request"})
@@ -26,14 +23,16 @@ func CreateTestimonial(c *gin.Context) {
 
 	userID := c.GetInt("user_id")
 
+	// cek booking milik user dan sudah checkout
 	var status string
 
-	query := `
-	SELECT status FROM booking
-	WHERE id = $1 AND id_user = $2
+	queryCheck := `
+	SELECT status
+	FROM booking
+	WHERE id=$1 AND id_user=$2
 	`
 
-	err := config.DB.QueryRow(query, req.BookingID, userID).Scan(&status)
+	err := config.DB.QueryRow(queryCheck, req.BookingID, userID).Scan(&status)
 
 	if err != nil {
 		c.JSON(404, gin.H{"error": "booking tidak ditemukan"})
@@ -41,16 +40,39 @@ func CreateTestimonial(c *gin.Context) {
 	}
 
 	if status != "completed" {
-		c.JSON(403, gin.H{"error": "testimoni hanya bisa setelah checkout"})
+		c.JSON(403, gin.H{
+			"error": "testimoni hanya bisa setelah checkout",
+		})
 		return
 	}
 
-	insert := `
-	INSERT INTO testimonials (booking_id,id_user,rating,comment)
-	VALUES ($1,$2,$3,$4)
+	// cek apakah sudah pernah review
+	var exists bool
+
+	checkReview := `
+	SELECT EXISTS(
+		SELECT 1 FROM testimonials
+		WHERE booking_id=$1
+	)
 	`
 
-	_, err = config.DB.Exec(insert,
+	config.DB.QueryRow(checkReview, req.BookingID).Scan(&exists)
+
+	if exists {
+		c.JSON(400, gin.H{
+			"error": "booking ini sudah memiliki testimonial",
+		})
+		return
+	}
+
+	// insert testimonial langsung active
+	queryInsert := `
+	INSERT INTO testimonials
+	(booking_id,id_user,rating,comment,status)
+	VALUES ($1,$2,$3,$4,'active')
+	`
+
+	_, err = config.DB.Exec(queryInsert,
 		req.BookingID,
 		userID,
 		req.Rating,
@@ -58,20 +80,27 @@ func CreateTestimonial(c *gin.Context) {
 	)
 
 	if err != nil {
-		c.JSON(500, gin.H{"error": "gagal membuat testimoni"})
+		c.JSON(500, gin.H{"error": "failed create testimonial"})
 		return
 	}
 
-	c.JSON(200, gin.H{
-		"message": "testimoni berhasil dibuat",
+	c.JSON(201, gin.H{
+		"message": "testimonial berhasil dibuat",
 	})
 }
 func GetTestimonials(c *gin.Context) {
 
 	rows, err := config.DB.Query(`
-	SELECT id_testimonial,booking_id,id_user,rating,comment,created_at
-	FROM testimonials
-	ORDER BY created_at DESC
+	SELECT
+	t.id_testimonial,
+	t.rating,
+	t.comment,
+	t.created_at,
+	u.name
+	FROM testimonials t
+	JOIN users u ON u.id_user = t.id_user
+	WHERE t.status='active'
+	ORDER BY t.created_at DESC
 	`)
 
 	if err != nil {
@@ -81,22 +110,25 @@ func GetTestimonials(c *gin.Context) {
 
 	defer rows.Close()
 
-	var testimonials []Testimonial
+	var testimonials []gin.H
 
 	for rows.Next() {
 
-		var t Testimonial
+		var id int
+		var rating float64
+		var comment string
+		var created string
+		var name string
 
-		rows.Scan(
-			&t.IDTestimonial,
-			&t.BookingID,
-			&t.IDUser,
-			&t.Rating,
-			&t.Comment,
-			&t.CreatedAt,
-		)
+		rows.Scan(&id, &rating, &comment, &created, &name)
 
-		testimonials = append(testimonials, t)
+		testimonials = append(testimonials, gin.H{
+			"id":         id,
+			"name":       name,
+			"rating":     rating,
+			"comment":    comment,
+			"created_at": created,
+		})
 	}
 
 	c.JSON(200, testimonials)
@@ -105,92 +137,144 @@ func GetTestimonialByID(c *gin.Context) {
 
 	id := c.Param("id")
 
-	var t Testimonial
+	var testimonial gin.H
 
 	query := `
-	SELECT id_testimonial,booking_id,id_user,rating,comment,created_at
-	FROM testimonials
-	WHERE id_testimonial = $1
+	SELECT
+	t.id_testimonial,
+	t.rating,
+	t.comment,
+	t.created_at,
+	u.name
+	FROM testimonials t
+	JOIN users u ON u.id_user = t.id_user
+	WHERE t.id_testimonial=$1
 	`
 
-	err := config.DB.QueryRow(query, id).Scan(
-		&t.IDTestimonial,
-		&t.BookingID,
-		&t.IDUser,
-		&t.Rating,
-		&t.Comment,
-		&t.CreatedAt,
-	)
+	row := config.DB.QueryRow(query, id)
+
+	var tid int
+	var rating float64
+	var comment string
+	var created string
+	var name string
+
+	err := row.Scan(&tid, &rating, &comment, &created, &name)
 
 	if err != nil {
-		c.JSON(404, gin.H{"error": "testimonial tidak ditemukan"})
+		c.JSON(404, gin.H{
+			"error": "testimonial tidak ditemukan",
+		})
 		return
 	}
 
-	c.JSON(200, t)
+	testimonial = gin.H{
+		"id":         tid,
+		"name":       name,
+		"rating":     rating,
+		"comment":    comment,
+		"created_at": created,
+	}
+
+	c.JSON(200, testimonial)
 }
 func UpdateTestimonial(c *gin.Context) {
 
 	id := c.Param("id")
 
-	var req Testimonial
+	var req struct {
+		Rating  float64 `json:"rating"`
+		Comment string  `json:"comment"`
+	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "invalid request"})
 		return
 	}
 
-	userID := c.GetInt("user_id")
-
 	query := `
 	UPDATE testimonials
 	SET rating=$1, comment=$2
-	WHERE id_testimonial=$3 AND id_user=$4
+	WHERE id_testimonial=$3
 	`
 
-	result, err := config.DB.Exec(query,
-		req.Rating,
-		req.Comment,
-		id,
-		userID,
-	)
+	result, err := config.DB.Exec(query, req.Rating, req.Comment, id)
 
 	if err != nil {
-		c.JSON(500, gin.H{"error": "gagal update"})
+		c.JSON(500, gin.H{"error": "failed update testimonial"})
 		return
 	}
 
 	rows, _ := result.RowsAffected()
 
 	if rows == 0 {
-		c.JSON(403, gin.H{"error": "bukan testimonial milik anda"})
+		c.JSON(404, gin.H{"error": "testimonial tidak ditemukan"})
 		return
 	}
 
-	c.JSON(200, gin.H{"message": "testimonial berhasil diupdate"})
+	c.JSON(200, gin.H{
+		"message": "testimonial berhasil diupdate",
+	})
+}
+func UpdateTestimonialStatus(c *gin.Context) {
+
+	id := c.Param("id")
+
+	var req struct {
+		Status string `json:"status"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "invalid request"})
+		return
+	}
+
+	query := `
+	UPDATE testimonials
+	SET status=$1
+	WHERE id_testimonial=$2
+	`
+
+	result, err := config.DB.Exec(query, req.Status, id)
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": "failed update status"})
+		return
+	}
+
+	rows, _ := result.RowsAffected()
+
+	if rows == 0 {
+		c.JSON(404, gin.H{"error": "testimonial tidak ditemukan"})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message": "status testimonial berhasil diubah",
+	})
 }
 func DeleteTestimonial(c *gin.Context) {
 
 	id := c.Param("id")
 
-	userID := c.GetInt("user_id")
-
 	query := `
 	DELETE FROM testimonials
-	WHERE id_testimonial=$1 AND id_user=$2
+	WHERE id_testimonial=$1
 	`
 
-	result, err := config.DB.Exec(query, id, userID)
+	result, err := config.DB.Exec(query, id)
 
 	if err != nil {
-		c.JSON(500, gin.H{"error": "gagal delete"})
+		c.JSON(500, gin.H{"error": "failed delete testimonial"})
 		return
 	}
 
 	rows, _ := result.RowsAffected()
 
 	if rows == 0 {
-		c.JSON(403, gin.H{"error": "bukan testimonial milik anda"})
+		c.JSON(404, gin.H{
+			"error": "testimonial tidak ditemukan",
+		})
 		return
 	}
 
