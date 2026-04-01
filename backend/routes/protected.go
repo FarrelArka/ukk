@@ -29,6 +29,11 @@ func ProtectedRoutes(r *gin.Engine) {
 		auth.GET("/testimonial/:id", handlers.GetTestimonialByID)
 		auth.PUT("/testimonial/:id", handlers.UpdateTestimonial)
 
+		// ========================
+		// PAYMENT (USER)
+		// ========================
+		auth.POST("/payment", handlers.CreatePayment)
+		auth.GET("/payment/:booking_id", handlers.GetPaymentByBooking)
 		AdminRoutes(auth)
 	}
 }

@@ -1,7 +1,12 @@
 package handlers
 
 import (
+	"bytes"
+	"database/sql"
+	"encoding/json"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 
 	"go-backend-basic/config"
@@ -9,8 +14,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type CreatePaymentRequest struct {
+	BookingID int     `json:"booking_id"`
+	Amount    float64 `json:"amount"`
+}
+
+type PaymentResponse struct {
+	PaymentID   int    `json:"payment_id"`
+	BookingID   int    `json:"booking_id"`
+	VANumber    string `json:"va_number"`
+	PaymentType string `json:"payment_type"`
+	Status      string `json:"status"`
+}
+
 // ========================
-// CREATE PAYMENT (DP)
+// CREATE PAYMENT (CORE API)
 // ========================
 func CreatePayment(c *gin.Context) {
 	var req CreatePaymentRequest
@@ -19,12 +37,10 @@ func CreatePayment(c *gin.Context) {
 		return
 	}
 
-	// cek booking exist & status
+	// cek booking
 	var status string
 	err := config.DB.QueryRow(`
-		SELECT status_booking 
-		FROM booking 
-		WHERE id_booking = $1
+		SELECT status_booking FROM booking WHERE id_booking=$1
 	`, req.BookingID).Scan(&status)
 
 	if err != nil {
@@ -33,42 +49,178 @@ func CreatePayment(c *gin.Context) {
 	}
 
 	if status == "cancelled" || status == "refunded" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "booking not valid for payment"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "booking not valid"})
 		return
 	}
 
 	// insert payment
-	query := `
+	var paymentID int
+	err = config.DB.QueryRow(`
 		INSERT INTO payment (booking_id, amount, status_payment)
 		VALUES ($1,$2,'pending')
 		RETURNING payment_id
-	`
+	`, req.BookingID, req.Amount).Scan(&paymentID)
 
-	var paymentID int
-	err = config.DB.QueryRow(query, req.BookingID, req.Amount).Scan(&paymentID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// ========================
-	// MIDTRANS INTEGRATION (STUB)
-	// ========================
-	paymentURL := "https://sandbox.midtrans.com/snap/v2/vtweb/dummy-payment-url"
+	// 🔥 order_id unik
+	orderID := "ORDER-" + strconv.Itoa(paymentID) + "-" + strconv.FormatInt(time.Now().Unix(), 10)
 
-	// update booking status
+	// ========================
+	// MIDTRANS CORE API
+	// ========================
+	serverKey := os.Getenv("MIDTRANS_SERVER_KEY")
+
+	payload := map[string]interface{}{
+		"payment_type": "bank_transfer",
+		"transaction_details": map[string]interface{}{
+			"order_id":     orderID,
+			"gross_amount": req.Amount,
+		},
+		"bank_transfer": map[string]interface{}{
+			"bank": "bca",
+		},
+	}
+
+	jsonData, _ := json.Marshal(payload)
+
+	reqMid, _ := http.NewRequest(
+		"POST",
+		"https://api.sandbox.midtrans.com/v2/charge",
+		bytes.NewBuffer(jsonData),
+	)
+
+	reqMid.Header.Set("Content-Type", "application/json")
+	reqMid.SetBasicAuth(serverKey, "")
+
+	client := &http.Client{}
+	resp, err := client.Do(reqMid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "midtrans error"})
+		return
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	// ambil VA
+	vaNumber := ""
+	if vaArr, ok := result["va_numbers"].([]interface{}); ok {
+		va := vaArr[0].(map[string]interface{})
+		vaNumber = va["va_number"].(string)
+	}
+
+	// update payment simpan order_id & VA
+	_, _ = config.DB.Exec(`
+		UPDATE payment 
+		SET order_id=$1, va_number=$2 
+		WHERE payment_id=$3
+	`, orderID, vaNumber, paymentID)
+
+	// update booking
 	_, _ = config.DB.Exec(`
 		UPDATE booking 
-		SET status_booking = 'dp_pending' 
-		WHERE id_booking = $1
+		SET status_booking='dp_pending' 
+		WHERE id_booking=$1
 	`, req.BookingID)
 
 	c.JSON(http.StatusCreated, PaymentResponse{
 		PaymentID:   paymentID,
 		BookingID:   req.BookingID,
-		PaymentURL:  paymentURL,
-		PaymentType: "dp",
+		VANumber:    vaNumber,
+		PaymentType: "bank_transfer",
 		Status:      "pending",
+	})
+}
+
+// ========================
+// WEBHOOK MIDTRANS
+// ========================
+func MidtransWebhook(c *gin.Context) {
+	var notif map[string]interface{}
+	if err := c.ShouldBindJSON(&notif); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	orderID := notif["order_id"].(string)
+	status := notif["transaction_status"].(string)
+
+	// mapping status
+	var paymentStatus string
+	switch status {
+	case "settlement":
+		paymentStatus = "paid"
+	case "pending":
+		paymentStatus = "pending"
+	case "expire":
+		paymentStatus = "expired"
+	case "cancel":
+		paymentStatus = "cancelled"
+	default:
+		paymentStatus = status
+	}
+
+	// update payment
+	_, err := config.DB.Exec(`
+		UPDATE payment 
+		SET status_payment=$1 
+		WHERE order_id=$2
+	`, paymentStatus, orderID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// update booking kalau paid
+	if paymentStatus == "paid" {
+		_, _ = config.DB.Exec(`
+			UPDATE booking 
+			SET status_booking='dp_paid'
+			WHERE id_booking = (
+				SELECT booking_id FROM payment WHERE order_id=$1
+			)
+		`, orderID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "webhook received"})
+}
+
+// ========================
+// GET PAYMENT BY BOOKING
+// ========================
+func GetPaymentByBooking(c *gin.Context) {
+	bookingID := c.Param("booking_id")
+
+	row := config.DB.QueryRow(`
+		SELECT payment_id, booking_id, amount, status_payment, va_number
+		FROM payment
+		WHERE booking_id=$1
+		ORDER BY payment_id DESC
+		LIMIT 1
+	`, bookingID)
+
+	var pID, bID int
+	var amount float64
+	var status, va string
+
+	err := row.Scan(&pID, &bID, &amount, &status, &va)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "payment not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"payment_id": pID,
+		"booking_id": bID,
+		"amount":     amount,
+		"status":     status,
+		"va_number":  va,
 	})
 }
 

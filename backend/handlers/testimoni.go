@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"go-backend-basic/config"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -132,6 +133,87 @@ func GetTestimonials(c *gin.Context) {
 	}
 
 	c.JSON(200, testimonials)
+}
+
+// ==========================
+// GET ALL TESTIMONIALS (ADMIN)
+// ==========================
+func GetAllTestimonialsAdmin(c *gin.Context) {
+
+	rows, err := config.DB.Query(`
+		SELECT id, user_id, rating, comment, status, created_at
+		FROM testimonials
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	var testimonials []gin.H
+
+	for rows.Next() {
+
+		var id int
+		var userID int
+		var rating int
+		var comment string
+		var status string
+		var createdAt string
+
+		err := rows.Scan(&id, &userID, &rating, &comment, &status, &createdAt)
+		if err != nil {
+			continue
+		}
+
+		testimonials = append(testimonials, gin.H{
+			"id":         id,
+			"user_id":    userID,
+			"rating":     rating,
+			"comment":    comment,
+			"status":     status,
+			"created_at": createdAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, testimonials)
+}
+
+// ==========================
+// GET TESTIMONIAL BY ID
+// ==========================
+func GetTestimonialByID(c *gin.Context) {
+
+	id := c.Param("id")
+
+	row := config.DB.QueryRow(`
+		SELECT id, user_id, rating, comment, status, created_at
+		FROM testimonials
+		WHERE id = $1
+	`, id)
+
+	var tid int
+	var userID int
+	var rating int
+	var comment string
+	var status string
+	var createdAt string
+
+	err := row.Scan(&tid, &userID, &rating, &comment, &status, &createdAt)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "testimonial not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":         tid,
+		"user_id":    userID,
+		"rating":     rating,
+		"comment":    comment,
+		"status":     status,
+		"created_at": createdAt,
+	})
 }
 func GetTestimonialByID(c *gin.Context) {
 
