@@ -12,7 +12,7 @@ export async function POST(request) {
     }
 
     // 🔥 KIRIM KE BACKEND GO LU
-    const res = await fetch("http://localhost:5050/api/register", {
+    const res = await fetch("http://localhost:5050/register", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
