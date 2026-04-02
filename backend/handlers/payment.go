@@ -225,39 +225,6 @@ func GetPaymentByBooking(c *gin.Context) {
 }
 
 // ========================
-// GET PAYMENT BY BOOKING
-// ========================
-func GetPaymentByBooking(c *gin.Context) {
-	bookingID := c.Param("booking_id")
-
-	row := config.DB.QueryRow(`
-		SELECT payment_id, booking_id, amount, status_payment
-		FROM payment
-		WHERE booking_id = $1
-		ORDER BY payment_id DESC
-		LIMIT 1
-	`, bookingID)
-
-	var paymentID int
-	var bID int
-	var amount float64
-	var status string
-
-	err := row.Scan(&paymentID, &bID, &amount, &status)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "payment not found"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"payment_id": paymentID,
-		"booking_id": bID,
-		"amount":     amount,
-		"status":     status,
-	})
-}
-
-// ========================
 // UPDATE PAYMENT STATUS (WEBHOOK SIMULATION)
 // ========================
 func UpdatePaymentStatus(c *gin.Context) {

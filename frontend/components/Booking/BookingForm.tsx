@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CustomSelect } from '@/components/ui/custom-select';
 import { useRouter } from "next/navigation";
+import { useSession } from 'next-auth/react';
 import PaymentModal from './PaymentModal';
 import { propertyHomes } from '@/app/api/propertyhomes';
 
@@ -10,6 +11,13 @@ interface BookingFormProps {
   initialCategory?: string;
   initialType?: string;
   initialPrice?: string;
+}
+
+interface UserSession {
+  name?: string | null;
+  email?: string | null;
+  phone?: string;
+  address?: string;
 }
 
 const BookingForm = ({ initialCategory = '', initialType = '', initialPrice = '' }: BookingFormProps) => {
@@ -23,6 +31,13 @@ const BookingForm = ({ initialCategory = '', initialType = '', initialPrice = ''
   const [checkInDate, setCheckInDate] = useState('');
   const [checkOutDate, setCheckOutDate] = useState('');
   const [guests, setGuests] = useState('');
+  
+  const { data: session } = useSession();
+  const user = session?.user as UserSession | undefined;
+  
+  const name = user?.name || '';
+  const email = user?.email || '';
+  const phoneNumber = user?.phone || '';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +46,7 @@ const BookingForm = ({ initialCategory = '', initialType = '', initialPrice = ''
 
   const handlePaymentComplete = () => {
       setIsPaymentModalOpen(false);
-      router.push(`/testimonial?category=${encodeURIComponent(category)}&type=${encodeURIComponent(type)}`);
+      router.push('/');
   };
 
   // Helper to format date nicely (e.g., "July 10, 2024")
@@ -49,17 +64,19 @@ const BookingForm = ({ initialCategory = '', initialType = '', initialPrice = ''
         <div className='flex flex-col lg:flex-row gap-6 w-full'>
           <div className='w-full space-y-3'>
             <label
-              htmlFor='fullName'
+              htmlFor='name'
               className='block mb-2 text-base font-medium text-black dark:text-white'
             >
-              Full Name
+              Name
             </label>
             <input
               type='text'
-              name='fullName'
-              id='fullName'
+              name='name'
+              id='name'
+              value={name}
+              readOnly
               placeholder='Enter your full name'
-              className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent text-black dark:text-white placeholder:text-black/50 dark:placeholder:text-white/50'
+              className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent opacity-70 text-black dark:text-white placeholder:text-black/50 dark:placeholder:text-white/50 cursor-not-allowed'
             />
           </div>
           <div className='w-full space-y-3'>
@@ -73,8 +90,10 @@ const BookingForm = ({ initialCategory = '', initialType = '', initialPrice = ''
               type='email'
               name='email'
               id='email'
+              value={email}
+              readOnly
               placeholder='Enter your email address'
-              className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent text-black dark:text-white placeholder:text-black/50 dark:placeholder:text-white/50'
+              className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent opacity-70 text-black dark:text-white placeholder:text-black/50 dark:placeholder:text-white/50 cursor-not-allowed'
             />
           </div>
         </div>
@@ -92,9 +111,10 @@ const BookingForm = ({ initialCategory = '', initialType = '', initialPrice = ''
               type='tel'
               name='phoneNumber'
               id='phoneNumber'
+              value={phoneNumber}
+              readOnly
               placeholder='Enter your phone number *'
-              required
-              className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent text-black dark:text-white placeholder:text-black/50 dark:placeholder:text-white/50'
+              className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent opacity-70 text-black dark:text-white placeholder:text-black/50 dark:placeholder:text-white/50 cursor-not-allowed'
             />
           </div>
           <div className='w-full space-y-3'>
@@ -170,7 +190,7 @@ const BookingForm = ({ initialCategory = '', initialType = '', initialPrice = ''
                 id='category'
                 value={category}
                 readOnly
-                className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent text-black dark:text-white cursor-not-allowed'
+                className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent opacity-70 text-black dark:text-white cursor-not-allowed'
               />
             ) : (
               <CustomSelect
@@ -199,7 +219,7 @@ const BookingForm = ({ initialCategory = '', initialType = '', initialPrice = ''
                 id='type'
                 value={type}
                 readOnly
-                className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent text-black dark:text-white cursor-not-allowed'
+                className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent opacity-70 text-black dark:text-white cursor-not-allowed'
               />
             ) : (
               <CustomSelect
@@ -230,7 +250,7 @@ const BookingForm = ({ initialCategory = '', initialType = '', initialPrice = ''
                 id='priceList'
                 value={`IDR ${priceList}`}
                 readOnly
-                className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent text-black dark:text-white cursor-not-allowed'
+                className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent opacity-70 text-black dark:text-white cursor-not-allowed'
               />
             ) : (
               <CustomSelect

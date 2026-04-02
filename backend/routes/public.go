@@ -14,7 +14,8 @@ func PublicRoutes(r *gin.Engine) {
 	// GOOGLE AUTH
 	r.GET("/auth/google/login", handlers.GoogleLogin)
 	r.GET("/auth/google/callback", handlers.GoogleCallback)
-
+	// WEBHOOK MIDTRANS
+	r.POST("/api/midtrans/webhook", handlers.MidtransWebhook)
 	// USERS (OPTIONAL)
 	// r.GET("/users", handlers.GetUsers)
 	// r.POST("/users", handlers.CreateUser)
