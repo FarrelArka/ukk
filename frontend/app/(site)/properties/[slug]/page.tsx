@@ -2,6 +2,7 @@
 import React from 'react';
 import { propertyHomes } from '@/app/api/propertyhomes';
 import { useParams } from "next/navigation";
+import { useSession } from 'next-auth/react';
 import { Icon } from '@iconify/react';
 import { testimonials } from '@/app/api/testimonial';
 import Link from 'next/link';
@@ -10,6 +11,7 @@ import Image from 'next/image';
 
 export default function Details() {
     const { slug } = useParams();
+    const { status } = useSession();
 
 
     const item = propertyHomes.find((item) => item.slug === slug);
@@ -283,7 +285,10 @@ export default function Details() {
                             </h4>
                             <p className='text-sm text-white/50 dark:text-white'>Discounted Price</p>
                             <Link 
-                                href={`/booking?category=${encodeURIComponent(item?.type || '')}&type=${encodeURIComponent(item?.name || '')}&price=${encodeURIComponent(item?.price || '')}`} 
+                                href={status === 'authenticated' 
+                                    ? `/booking?category=${encodeURIComponent(item?.type || '')}&type=${encodeURIComponent(item?.name || '')}&price=${encodeURIComponent(item?.price || '')}`
+                                    : '/signup'
+                                } 
                                 className='py-4 px-8 bg-primary text-white rounded-full w-full block text-center hover:bg-white duration-300 text-base mt-8 hover:cursor-pointer hover:text-primary'
                             >
                                 Book Now

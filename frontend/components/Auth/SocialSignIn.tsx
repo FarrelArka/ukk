@@ -3,15 +3,14 @@ import { signIn } from "next-auth/react";
 
 
 const SocialSignIn = () => {
-const handleGoogleLogin = () => {
-  window.location.href = "http://localhost:5050/auth/google/login";
-};
-
+  const handleGoogleSignIn = async () => {
+    await signIn("google");
+  };
   return (
     <>
       <div className="flex gap-4">
         <button
-          onClick={handleGoogleLogin}
+          onClick={handleGoogleSignIn}
           className="flex w-full items-center justify-center gap-2.5 rounded-2xl border border-black/10 dark:border-white/20 p-3.5 text-dark duration-200 ease-in dark:text-white dark:hover:bg-primary/10 hover:!bg-primary/10"
         >
           Sign In

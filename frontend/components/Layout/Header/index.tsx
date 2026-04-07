@@ -7,6 +7,7 @@ import NavLink from './Navigation/NavLink'
 import { useTheme } from 'next-themes'
 import { usePathname } from 'next/navigation'
 import Image from 'next/image'
+import { useSession, signOut } from 'next-auth/react'
 
 const Header: React.FC = () => {
   const [sticky, setSticky] = useState(false)
@@ -14,6 +15,7 @@ const Header: React.FC = () => {
   const { theme, setTheme } = useTheme()
   const pathname = usePathname()
   const isHomepage = pathname === '/'
+  const { data: session, status } = useSession()
 
   const sideMenuRef = useRef<HTMLDivElement>(null)
 
@@ -104,17 +106,19 @@ const Header: React.FC = () => {
                 <span className='hidden sm:block'>Menu</span>
               </button>
             </div>
-            <div className='hidden sm:block'>
-              <Link href="/profile">
-                <Image
-                  src='/images/header/avatar.png'
-                  alt='avatar'
-                  width={40}
-                  height={40}
-                  className='rounded-full hover:opacity-80 transition-opacity w-8 h-8 sm:w-10 sm:h-10 lg:w-[52px] lg:h-[52px]'
-                />
-              </Link>
-            </div>
+            {status === 'authenticated' && (
+              <div className='hidden sm:block'>
+                <Link href="/profile">
+                  <Image
+                    src='/images/header/avatar.png'
+                    alt='avatar'
+                    width={40}
+                    height={40}
+                    className='rounded-full hover:opacity-80 transition-opacity w-8 h-8 sm:w-10 sm:h-10 lg:w-[52px] lg:h-[52px]'
+                  />
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </nav>
@@ -157,14 +161,26 @@ const Header: React.FC = () => {
                 {navLinks.map((item, index) => (
                   <NavLink key={index} item={item} onClick={() => setNavbarOpen(false)} />
                 ))}
-                <li className='flex items-center gap-4'>
-                  <Link href="/signin" className='py-4 px-8 bg-primary text-base leading-4 block w-fit text-white rounded-full border border-primary font-semibold mt-3 hover:bg-transparent hover:text-primary duration-300'>
-                    Sign In
-                  </Link>
-                  <Link href="/signup" className='py-4 px-8 bg-transparent border border-white text-base leading-4 block w-fit text-white rounded-full font-semibold mt-3 hover:bg-transparent hover:text-primary hover:border-primary duration-300'>
-                    Sign up
-                  </Link>
-                </li>
+                {status === 'unauthenticated' && (
+                  <li className='flex items-center gap-4'>
+                    <Link href="/signin" className='py-4 px-8 bg-primary text-base leading-4 block w-fit text-white rounded-full border border-primary font-semibold mt-3 hover:bg-transparent hover:text-primary duration-300 cursor-pointer'>
+                      Sign In
+                    </Link>
+                    <Link href="/signup" className='py-4 px-8 bg-transparent border border-white text-base leading-4 block w-fit text-white rounded-full font-semibold mt-3 hover:bg-transparent hover:text-primary hover:border-primary duration-300 cursor-pointer'>
+                      Sign up
+                    </Link>
+                  </li>
+                )}
+                {status === 'authenticated' && (
+                  <li>
+                    <button 
+                      onClick={() => signOut()}
+                      className='py-4 px-8 bg-transparent border border-white text-base leading-4 block w-fit text-white rounded-full font-semibold mt-3 hover:bg-transparent hover:text-primary hover:border-primary duration-300 cursor-pointer'
+                    >
+                      Sign Out
+                    </button>
+                  </li>
+                )}
               </ul>
             </nav>
           </div>
@@ -180,18 +196,20 @@ const Header: React.FC = () => {
               +62 821-3145-9670{' '}
             </Link>
           </div>
-          <div className='flex items-center gap-4 mb-6 sm:hidden'>
-            <Link href="/profile" className='flex items-center gap-4' onClick={() => setNavbarOpen(false)}>
-               <Image
-                  src='/images/header/avatar.png'
-                  alt='avatar'
-                  width={40}
-                  height={40}
-                  className='rounded-full'
-                />
-                <span className='text-white font-medium'>User</span>
-            </Link>
-          </div>
+          {status === 'authenticated' && (
+            <div className='flex items-center gap-4 mb-6 sm:hidden'>
+              <Link href="/profile" className='flex items-center gap-4' onClick={() => setNavbarOpen(false)}>
+                <Image
+                    src='/images/header/avatar.png'
+                    alt='avatar'
+                    width={40}
+                    height={40}
+                    className='rounded-full'
+                  />
+                  <span className='text-white font-medium'>{session?.user?.name || 'User'}</span>
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </header >

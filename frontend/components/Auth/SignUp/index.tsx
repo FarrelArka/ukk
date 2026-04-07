@@ -35,7 +35,7 @@ const SignUp = ({ signUpOpen }: { signUpOpen?: (value: boolean) => void }) => {
       .then((data) => {
         toast.success("Successfully registered");
         setLoading(false);
-        router.push("/");
+        router.push("/signin");
       })
       .catch((err) => {
         toast.error(err.message);

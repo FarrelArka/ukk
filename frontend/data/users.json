@@ -1,0 +1,50 @@
+[
+  {
+    "id": "initial-admin",
+    "name": "Admin User",
+    "email": "admin@example.com",
+    "password": "password123"
+  },
+  {
+    "id": "1772117756906",
+    "name": "Test User",
+    "email": "test@example.com",
+    "password": "password123"
+  },
+  {
+    "id": "1772118047471",
+    "name": "Pakde",
+    "email": "pakde123@gmail.com",
+    "password": "pakde123",
+    "phone": "8096032144",
+    "address": "Nabdul District"
+  },
+  {
+    "id": "1772200863383",
+    "name": "Supri",
+    "email": "supri123@gmail.com",
+    "password": "supri123",
+    "phone": "08917182123",
+    "address": "Grafika"
+  },
+  {
+    "id": "1772200994606",
+    "name": "Ali Mujib",
+    "email": "ali123@gmail.com",
+    "password": "ali123"
+  },
+  {
+    "id": "1772291926500",
+    "name": "Wito",
+    "email": "wito123@gmail.com",
+    "password": "wito123",
+    "phone": "08098398209",
+    "address": "Wagir City"
+  },
+  {
+    "id": "1775103279030",
+    "name": "iwan",
+    "email": "iwan@gmail.com",
+    "password": "123"
+  }
+]

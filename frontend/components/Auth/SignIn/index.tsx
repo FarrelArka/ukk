@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useContext, useState } from "react";
 import SocialSignIn from "../SocialSignIn";
 import { Toaster } from 'react-hot-toast';
+import toast from "react-hot-toast";
 import AuthDialogContext from "@/app/context/AuthDialogContext";
 import Logo from "@/components/Layout/Header/BrandLogo/Logo";
 import { Icon } from "@iconify/react"
@@ -13,36 +14,51 @@ import { Icon } from "@iconify/react"
 const Signin = ({ signInOpen }: { signInOpen?: (value: boolean) => void }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
   const authDialog = useContext(AuthDialogContext);
   const [showPassword, setShowPassword] = useState(false);
 
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const result = await signIn("credentials", {
-      redirect: false,
-      email,
-      password,
-    });
-    if (result?.error) {
-      // Handle error if needed
-    }
-    if (result?.status === 200) {
-      setTimeout(() => {
-        signInOpen?.(false);
-      }, 1200);
-      authDialog?.setIsSuccessDialogOpen(true);
-      setTimeout(() => {
-        authDialog?.setIsSuccessDialogOpen(false);
-      }, 1100);
-    } else {
-      authDialog?.setIsFailedDialogOpen(true);
-      setTimeout(() => {
-        authDialog?.setIsFailedDialogOpen(false);
-      }, 1100);
+    setLoading(true);
+    console.log("Attempting sign in with:", email);
+    
+    try {
+      const result = await signIn("credentials", {
+        redirect: false,
+        email,
+        password,
+      });
+
+      console.log("SignIn result:", result);
+
+      if (result?.error) {
+        toast.error(result.error === "CredentialsSignin" ? "Invalid email or password" : result.error);
+        authDialog?.setIsFailedDialogOpen(true);
+        setTimeout(() => {
+          authDialog?.setIsFailedDialogOpen(false);
+        }, 1100);
+      } else if (result?.status === 200) {
+        toast.success("Successfully signed in!");
+        setTimeout(() => {
+          signInOpen?.(false);
+          window.location.href = "/"; // Force refresh to update session
+        }, 1200);
+        authDialog?.setIsSuccessDialogOpen(true);
+        setTimeout(() => {
+          authDialog?.setIsSuccessDialogOpen(false);
+        }, 1100);
+      } else {
+        toast.error("An unexpected error occurred");
+      }
+    } catch (err) {
+      console.error("SignIn exception:", err);
+      toast.error("Failed to sign in. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
-
 
   return (
     <>
@@ -118,11 +134,11 @@ const Signin = ({ signInOpen }: { signInOpen?: (value: boolean) => void }) => {
         <div className="mb-9">
           <button
             type="submit"
-            className="flex w-full cursor-pointer items-center justify-center rounded-2xl border border-primary bg-primary hover:bg-transparent hover:text-primary px-5 py-3 text-base text-white transition duration-300 ease-in-out hover:scale-105 "
+            disabled={loading}
+            className="flex w-full cursor-pointer items-center justify-center rounded-2xl border border-primary bg-primary hover:bg-transparent hover:text-primary px-5 py-3 text-base text-white transition duration-300 ease-in-out hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Sign In
+            {loading ? "Signing In..." : "Sign In"}
           </button>
-
         </div>
       </form>
 

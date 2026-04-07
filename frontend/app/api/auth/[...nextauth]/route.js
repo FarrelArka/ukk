@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
+import { findUserByEmail } from '@/lib/userStore';
 
 const handler = NextAuth({
   site: process.env.NEXTAUTH_URL || 'http://localhost:3000',
@@ -12,20 +13,60 @@ const handler = NextAuth({
     CredentialsProvider({
       name: 'credentials',
       credentials: {
-        username: { label: 'Username', type: 'text' },
+        email: { label: 'Email Address', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
       authorize: async (credentials) => {
-        // Add your own authentication logic here
-        if (credentials.username === 'admin' && credentials.password === 'admin123') {
+        if (!credentials?.email || !credentials?.password) return null;
+
+        const user = findUserByEmail(credentials.email);
+
+        if (user && user.password === credentials.password) {
           // Return user object if credentials are valid
-          return Promise.resolve({ id: 1, name: 'Admin', email: 'admin@example.com' });
+          return { 
+            id: user.id, 
+            name: user.name, 
+            email: user.email,
+            phone: user.phone || '',
+            address: user.address || ''
+          };
         } else {
           // Return null if credentials are invalid
-          return Promise.resolve(null);
+          return null;
         }
       },
     }),
   ],
+  session: {
+    strategy: 'jwt',
+  },
+  callbacks: {
+    async jwt({ token, user, trigger, session }) {
+      if (user) {
+        token.id = user.id;
+        token.name = user.name;
+        token.email = user.email;
+        token.phone = user.phone;
+        token.address = user.address;
+      }
+      if (trigger === "update" && session) {
+        token.name = session.name;
+        token.phone = session.phone;
+        token.address = session.address;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (token) {
+        session.user.id = token.id;
+        session.user.name = token.name;
+        session.user.email = token.email;
+        session.user.phone = token.phone;
+        session.user.address = token.address;
+      }
+      return session;
+    },
+  },
+  secret: process.env.NEXTAUTH_SECRET || 'secret',
 });
 export { handler as GET, handler as POST };

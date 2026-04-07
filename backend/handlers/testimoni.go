@@ -215,51 +215,7 @@ func GetTestimonialByID(c *gin.Context) {
 		"created_at": createdAt,
 	})
 }
-func GetTestimonialByID(c *gin.Context) {
 
-	id := c.Param("id")
-
-	var testimonial gin.H
-
-	query := `
-	SELECT
-	t.id_testimonial,
-	t.rating,
-	t.comment,
-	t.created_at,
-	u.name
-	FROM testimonials t
-	JOIN users u ON u.id_user = t.id_user
-	WHERE t.id_testimonial=$1
-	`
-
-	row := config.DB.QueryRow(query, id)
-
-	var tid int
-	var rating float64
-	var comment string
-	var created string
-	var name string
-
-	err := row.Scan(&tid, &rating, &comment, &created, &name)
-
-	if err != nil {
-		c.JSON(404, gin.H{
-			"error": "testimonial tidak ditemukan",
-		})
-		return
-	}
-
-	testimonial = gin.H{
-		"id":         tid,
-		"name":       name,
-		"rating":     rating,
-		"comment":    comment,
-		"created_at": created,
-	}
-
-	c.JSON(200, testimonial)
-}
 func UpdateTestimonial(c *gin.Context) {
 
 	id := c.Param("id")
