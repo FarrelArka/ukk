@@ -161,11 +161,12 @@ func GetMyBookings(c *gin.Context) {
 
 	rows, err := config.DB.Query(`
 		SELECT 
-			b.id_booking, b.unit_id, b.check_in, b.check_out, 
-			b.jumlah_orang, b.status_booking, b.invoice_number,
-			p.payment_status, p.amount
+			b.id_booking, COALESCE(b.unit_id, 0), 
+			COALESCE(CAST(b.check_in AS VARCHAR), ''), COALESCE(CAST(b.check_out AS VARCHAR), ''), 
+			COALESCE(b.jumlah_orang, 0), COALESCE(b.status_booking, ''), COALESCE(b.invoice_number, ''),
+			COALESCE(p.status_payment, 'unpaid'), COALESCE(p.amount, 0)
 		FROM booking b
-		JOIN payment p ON p.booking_id = b.id_booking
+		LEFT JOIN payment p ON p.booking_id = b.id_booking
 		WHERE b.user_id = $1
 		ORDER BY b.id_booking DESC
 	`, userID)
@@ -177,15 +178,15 @@ func GetMyBookings(c *gin.Context) {
 	defer rows.Close()
 
 	type BookingResponse struct {
-		IDBooking   int       `json:"id_booking"`
-		UnitID      int       `json:"unit_id"`
-		CheckIn     time.Time `json:"check_in"`
-		CheckOut    time.Time `json:"check_out"`
-		JumlahOrang int       `json:"jumlah_orang"`
-		Status      string    `json:"status_booking"`
-		Invoice     string    `json:"invoice"`
-		Payment     string    `json:"payment_status"`
-		Amount      int       `json:"amount"`
+		IDBooking   int     `json:"id_booking"`
+		UnitID      int     `json:"unit_id"`
+		CheckIn     string  `json:"check_in"`
+		CheckOut    string  `json:"check_out"`
+		JumlahOrang int     `json:"jumlah_orang"`
+		Status      string  `json:"status_booking"`
+		Invoice     string  `json:"invoice"`
+		Payment     string  `json:"payment_status"`
+		Amount      float64 `json:"amount"`
 	}
 
 	bookings := []BookingResponse{}
@@ -204,8 +205,14 @@ func GetMyBookings(c *gin.Context) {
 			&b.Amount,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
+			fmt.Println("Scan Error Get My Bookings:", err)
+			continue
+		}
+		if len(b.CheckIn) >= 10 {
+			b.CheckIn = b.CheckIn[:10]
+		}
+		if len(b.CheckOut) >= 10 {
+			b.CheckOut = b.CheckOut[:10]
 		}
 		bookings = append(bookings, b)
 	}
@@ -220,11 +227,17 @@ func GetMyBookings(c *gin.Context) {
 func GetAllBookings(c *gin.Context) {
 	rows, err := config.DB.Query(`
 		SELECT 
-			b.id_booking, b.user_id, b.unit_id, b.check_in, b.check_out,
-			b.jumlah_orang, b.status_booking, b.invoice_number,
-			p.payment_status, p.amount
+			b.id_booking, COALESCE(b.user_id, 0), COALESCE(b.unit_id, 0), 
+			COALESCE(CAST(b.check_in AS VARCHAR), ''), COALESCE(CAST(b.check_out AS VARCHAR), ''),
+			COALESCE(b.jumlah_orang, 0), COALESCE(b.status_booking, ''), COALESCE(b.invoice_number, ''),
+			COALESCE(p.status_payment, 'unpaid'), COALESCE(p.amount, 0),
+			COALESCE(u.name, 'Unknown User'),
+			COALESCE(u.email, ''),
+			COALESCE(d.name, 'Unknown Unit')
 		FROM booking b
-		JOIN payment p ON p.booking_id = b.id_booking
+		LEFT JOIN payment p ON p.booking_id = b.id_booking
+		LEFT JOIN users u ON u.id_user = b.user_id
+		LEFT JOIN unit_detail d ON d.unit_id = b.unit_id
 		ORDER BY b.id_booking DESC
 	`)
 
@@ -237,19 +250,35 @@ func GetAllBookings(c *gin.Context) {
 	bookings := []gin.H{}
 
 	for rows.Next() {
-		var id, userID, unitID, jumlahOrang, amount int
-		var checkIn, checkOut time.Time
-		var status, invoice, payment string
+		var id, userID, unitID, jumlahOrang int
+		var amount float64
+		var checkIn, checkOut string
+		var status, invoice, payment, userName, email, unitName string
 
-		rows.Scan(
+		err := rows.Scan(
 			&id, &userID, &unitID, &checkIn, &checkOut,
 			&jumlahOrang, &status, &invoice, &payment, &amount,
+			&userName, &email, &unitName,
 		)
+		if err != nil {
+			fmt.Println("Scan Error Get All Bookings:", err)
+			continue
+		}
+
+		if len(checkIn) >= 10 {
+			checkIn = checkIn[:10]
+		}
+		if len(checkOut) >= 10 {
+			checkOut = checkOut[:10]
+		}
 
 		bookings = append(bookings, gin.H{
 			"id_booking":     id,
 			"user_id":        userID,
+			"user_name":      userName,
+			"email":          email,
 			"unit_id":        unitID,
+			"unit_name":      unitName,
 			"check_in":       checkIn,
 			"check_out":      checkOut,
 			"jumlah_orang":   jumlahOrang,
@@ -308,9 +337,9 @@ func CancelBooking(c *gin.Context) {
 	var paymentStatus string
 
 	err := config.DB.QueryRow(`
-		SELECT b.check_in, b.status_booking, p.payment_status
+		SELECT b.check_in, COALESCE(b.status_booking, ''), COALESCE(p.status_payment, 'unpaid')
 		FROM booking b
-		JOIN payment p ON p.booking_id = b.id_booking
+		LEFT JOIN payment p ON p.booking_id = b.id_booking
 		WHERE b.id_booking = $1 AND b.user_id = $2
 	`, bookingID, userID).Scan(&checkIn, &status, &paymentStatus)
 
@@ -350,7 +379,7 @@ func CancelBooking(c *gin.Context) {
 	// update payment
 	_, err = config.DB.Exec(`
 		UPDATE payment
-		SET payment_status = 'refunded'
+		SET status_payment = 'refunded'
 		WHERE booking_id = $1
 	`, bookingID)
 
@@ -377,27 +406,27 @@ func GetBookingByID(c *gin.Context) {
 	}
 
 	var data struct {
-		IDBooking     int
-		UserID        int
-		UnitID        int
-		CheckIn       time.Time
-		CheckOut      time.Time
-		JumlahOrang   int
-		Status        string
-		Invoice       string
-		PaymentStatus string
-		Amount        int
+		IDBooking     int     `json:"id_booking"`
+		UserID        int     `json:"user_id"`
+		UnitID        int     `json:"unit_id"`
+		CheckIn       string  `json:"check_in"`
+		CheckOut      string  `json:"check_out"`
+		JumlahOrang   int     `json:"jumlah_orang"`
+		Status        string  `json:"status_booking"`
+		Invoice       string  `json:"invoice_number"`
+		PaymentStatus string  `json:"payment_status"`
+		Amount        float64 `json:"amount"`
 	}
 
 	err = config.DB.QueryRow(`
 		SELECT 
-			b.id_booking, b.user_id, b.unit_id,
-			b.check_in, b.check_out,
-			b.jumlah_orang, b.status_booking,
-			b.invoice_number,
-			p.payment_status, p.amount
+			b.id_booking, COALESCE(b.user_id, 0), COALESCE(b.unit_id, 0),
+			COALESCE(CAST(b.check_in AS VARCHAR), ''), COALESCE(CAST(b.check_out AS VARCHAR), ''),
+			COALESCE(b.jumlah_orang, 0), COALESCE(b.status_booking, ''),
+			COALESCE(b.invoice_number, ''),
+			COALESCE(p.status_payment, 'unpaid'), COALESCE(p.amount, 0)
 		FROM booking b
-		JOIN payment p ON p.booking_id = b.id_booking
+		LEFT JOIN payment p ON p.booking_id = b.id_booking
 		WHERE b.id_booking = $1
 	`, bookingID).Scan(
 		&data.IDBooking,
@@ -415,6 +444,13 @@ func GetBookingByID(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "booking not found"})
 		return
+	}
+
+	if len(data.CheckIn) >= 10 {
+		data.CheckIn = data.CheckIn[:10]
+	}
+	if len(data.CheckOut) >= 10 {
+		data.CheckOut = data.CheckOut[:10]
 	}
 
 	c.JSON(http.StatusOK, data)

@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
+import { addUser, findUserByEmail } from '@/lib/userStore';
 
 export async function POST(request) {
   try {
@@ -6,46 +7,36 @@ export async function POST(request) {
 
     if (!name || !email || !password) {
       return NextResponse.json(
-        { message: "Semua field wajib diisi" },
+        { message: 'Missing required fields' },
         { status: 400 }
       );
     }
 
-    // 🔥 KIRIM KE BACKEND GO LU
-    const res = await fetch("http://localhost:5050/register", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name,
-        email,
-        password, // kirim plaintext → backend yang hash
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
+    const existingUser = findUserByEmail(email);
+    if (existingUser) {
       return NextResponse.json(
-        { message: data.message || "Register gagal" },
-        { status: res.status }
+        { message: 'User already exists' },
+        { status: 400 }
       );
     }
 
-    // 🔥 RETURN RESPONSE KE FRONTEND
+    const newUser = {
+      id: Date.now().toString(),
+      name,
+      email,
+      password, // Note: In a real app, always hash the password!
+    };
+
+    addUser(newUser);
+
     return NextResponse.json(
-      {
-        message: "Register berhasil",
-        user: data.user,
-      },
+      { message: 'User registered successfully', user: { id: newUser.id, name: newUser.name, email: newUser.email } },
       { status: 201 }
     );
   } catch (error) {
-    console.error("REGISTER ERROR:", error);
-
+    console.error('Registration error:', error);
     return NextResponse.json(
-      { message: "Internal server error" },
+      { message: 'Internal server error' },
       { status: 500 }
     );
   }

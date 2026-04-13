@@ -11,6 +11,16 @@ var jwtKey = []byte("SECRET_KEY_GANTI_NANTI")
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+<<<<<<< HEAD
+=======
+		// ✅ Skip OPTIONS preflight — jangan block CORS
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		authHeader := c.GetHeader("Authorization")
+>>>>>>> 066ada8a07e849331e6f01d7d8a824ba127bd2fe
 
 		// 🔥 AMBIL DARI COOKIE
 		tokenString, err := c.Cookie("cookie")

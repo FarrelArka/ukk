@@ -24,13 +24,16 @@ func AdminRoutes(auth *gin.RouterGroup) {
 		admin.DELETE("/accommodations/:id", handlers.DeleteUnit)
 
 		// =========================
-		// USER MANAGEMENT
+		// USERS
 		// =========================
-		admin.GET("/users", handlers.GetAllUsers)
-		admin.GET("/users/:id", handlers.GetUserByID)
-		admin.POST("/users/create", handlers.CreateUser)
-		admin.PUT("/users/:id", handlers.UpdateUser)
-		admin.DELETE("/users/:id", handlers.DeleteUser)
+		users := admin.Group("/users")
+		{
+			users.GET("", handlers.GetAllUsers)
+			users.GET("/:id", handlers.GetUserByID)
+			users.POST("", handlers.CreateUser) // ✅ FIXED
+			users.PUT("/:id", handlers.UpdateUser)
+			users.DELETE("/:id", handlers.DeleteUser)
+		}
 
 		// =========================
 		// BOOKING MANAGEMENT

@@ -40,5 +40,11 @@
     "password": "wito123",
     "phone": "08098398209",
     "address": "Wagir City"
+  },
+  {
+    "id": "1775103279030",
+    "name": "iwan",
+    "email": "iwan@gmail.com",
+    "password": "123"
   }
 ]

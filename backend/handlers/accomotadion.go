@@ -15,6 +15,7 @@ import (
 // =======================
 func CreateUnit(c *gin.Context) {
 	var input struct {
+<<<<<<< HEAD
 		Category    string `json:"category"`
 		StatusUnit  string `json:"status_unit"`
 		Description string `json:"description"`
@@ -27,11 +28,31 @@ func CreateUnit(c *gin.Context) {
 
 		Images    []string `json:"images"`
 		Fasilitas []string `json:"fasilitas"`
+=======
+		Category    string   `form:"category" json:"category"`
+		StatusUnit  string   `form:"status_unit" json:"status_unit"`
+		Description string   `form:"description" json:"description"`
+		Capacity    int      `form:"capacity" json:"capacity"`
+		Name        string   `form:"name" json:"name"`
+		Price       float64  `form:"price" json:"price"`
+		Alamat      string   `form:"alamat" json:"alamat"`
+		JumlahKamar int      `form:"jumlah_kamar" json:"jumlah_kamar"`
+		Images      []string `form:"images" json:"images"`
+		Fasilitas   []string `form:"fasilitas" json:"fasilitas"`
+>>>>>>> 066ada8a07e849331e6f01d7d8a824ba127bd2fe
 	}
 
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
+	contentType := c.GetHeader("Content-Type")
+	if strings.Contains(contentType, "multipart/form-data") {
+		if err := c.ShouldBind(&input); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+	} else {
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	tx, err := config.DB.Begin()
@@ -45,10 +66,10 @@ func CreateUnit(c *gin.Context) {
 	// ===================
 	var unitID int
 	err = tx.QueryRow(`
-		INSERT INTO unit (category, status_unit, description, created_at)
-		VALUES ($1,$2,$3,NOW())
+		INSERT INTO unit (category, status_unit, description, capacity, created_at)
+		VALUES ($1,$2,$3,$4,NOW())
 		RETURNING unit_id
-	`, input.Category, input.StatusUnit, input.Description).Scan(&unitID)
+	`, input.Category, input.StatusUnit, input.Description, input.Capacity).Scan(&unitID)
 
 	if err != nil {
 		tx.Rollback()
@@ -78,7 +99,6 @@ func CreateUnit(c *gin.Context) {
 	// 3️⃣ INSERT GALLERY
 	// ===================
 	var images []string
-	contentType := c.GetHeader("Content-Type")
 	if strings.Contains(contentType, "multipart/form-data") {
 
 		form, _ := c.MultipartForm()
@@ -143,8 +163,8 @@ func CreateUnit(c *gin.Context) {
 // =======================
 func GetUnits(c *gin.Context) {
 	rows, err := config.DB.Query(`
-		SELECT u.unit_id, u.category, u.status_unit, u.description,
-		       d.detail_id, d.name, d.price, d.alamat, d.jumlah_kamar
+		SELECT u.unit_id, u.category, COALESCE(u.status_unit, ''), COALESCE(u.description, ''), COALESCE(u.capacity, 0),
+		       COALESCE(d.detail_id, 0), COALESCE(d.name, ''), COALESCE(d.price, 0.0), COALESCE(d.alamat, ''), COALESCE(d.jumlah_kamar, 0)
 		FROM unit u
 		LEFT JOIN unit_detail d ON d.unit_id = u.unit_id
 		ORDER BY u.unit_id DESC
@@ -160,6 +180,7 @@ func GetUnits(c *gin.Context) {
 		Category    string   `json:"category"`
 		StatusUnit  string   `json:"status_unit"`
 		Description string   `json:"description"`
+		Capacity    int      `json:"capacity"`
 		DetailID    int      `json:"detail_id"`
 		Name        string   `json:"name"`
 		Price       float64  `json:"price"`
@@ -174,7 +195,7 @@ func GetUnits(c *gin.Context) {
 
 	for rows.Next() {
 		var u Unit
-		err := rows.Scan(&u.UnitID, &u.Category, &u.StatusUnit, &u.Description,
+		err := rows.Scan(&u.UnitID, &u.Category, &u.StatusUnit, &u.Description, &u.Capacity,
 			&u.DetailID, &u.Name, &u.Price, &u.Alamat, &u.JumlahKamar)
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
@@ -216,6 +237,7 @@ func GetUnitByID(c *gin.Context) {
 	id := c.Param("id")
 
 	var u struct {
+<<<<<<< HEAD
 		UnitID      int    `json:"unit_id"`
 		Category    string `json:"category"`
 		StatusUnit  string `json:"status_unit"`
@@ -260,6 +282,7 @@ func GetUnitByID(c *gin.Context) {
 		&u.Kapasitas,
 	)
 
+
 	if err != nil {
 		c.JSON(404, gin.H{"message": "Unit tidak ditemukan"})
 		return
@@ -303,16 +326,36 @@ func UpdateAccommodation(c *gin.Context) {
 	id := c.Param("id")
 
 	var input struct {
+<<<<<<< HEAD
 		Name        string  `json:"name"`
 		Price       float64 `json:"price"`
 		Alamat      string  `json:"alamat"`
 		JumlahKamar int     `json:"jumlah_kamar"`
 		Kapasitas   int     `json:"kapasitas"`
+=======
+		Category    string   `form:"category" json:"category"`
+		StatusUnit  string   `form:"status_unit" json:"status_unit"`
+		Description string   `form:"description" json:"description"`
+		Capacity    int      `form:"capacity" json:"capacity"`
+		Name        string   `form:"name" json:"name"`
+		Price       float64  `form:"price" json:"price"`
+		Alamat      string   `form:"alamat" json:"alamat"`
+		JumlahKamar int      `form:"jumlah_kamar" json:"jumlah_kamar"`
+		Fasilitas   []string `form:"fasilitas" json:"fasilitas"`
+>>>>>>> 066ada8a07e849331e6f01d7d8a824ba127bd2fe
 	}
 
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
+	contentType := c.GetHeader("Content-Type")
+	if strings.Contains(contentType, "multipart/form-data") {
+		if err := c.ShouldBind(&input); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+	} else {
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	tx, err := config.DB.Begin()
@@ -323,6 +366,7 @@ func UpdateAccommodation(c *gin.Context) {
 
 	// UPDATE DETAIL (INI YANG BENAR)
 	_, err = tx.Exec(`
+<<<<<<< HEAD
 		UPDATE unit_detail
 		SET name=$1,
 		    price=$2,
@@ -331,11 +375,77 @@ func UpdateAccommodation(c *gin.Context) {
 		    kapasitas=$5
 		WHERE detail_id=$6
 	`, input.Name, input.Price, input.Alamat, input.JumlahKamar, input.Kapasitas, id)
+=======
+		UPDATE unit
+		SET category=$1, status_unit=$2, description=$3, capacity=$4
+		WHERE unit_id=$5
+	`, input.Category, input.StatusUnit, input.Description, input.Capacity, id)
 
 	if err != nil {
 		tx.Rollback()
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
+	}
+
+	_, err = tx.Exec(`
+		UPDATE unit_detail
+		SET name=$1, price=$2, alamat=$3, jumlah_kamar=$4
+		WHERE unit_id=$5
+	`, input.Name, input.Price, input.Alamat, input.JumlahKamar, id)
+>>>>>>> 066ada8a07e849331e6f01d7d8a824ba127bd2fe
+
+	if err != nil {
+		tx.Rollback()
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	// ===================
+	// UPDATE GALLERY & FASILITAS
+	// ===================
+	// Get detail_id first
+	var detailID int
+	err = tx.QueryRow(`SELECT detail_id FROM unit_detail WHERE unit_id=$1`, id).Scan(&detailID)
+	if err == nil {
+		// 1. UPDATE GALLERY if images are uploaded
+		form, _ := c.MultipartForm()
+		if form != nil {
+			files := form.File["images"]
+			if len(files) > 0 {
+				// Delete old gallery entries
+				tx.Exec(`DELETE FROM gallery WHERE detail_id=$1`, detailID)
+
+				// Insert new images
+				for _, file := range files {
+					f, err := file.Open()
+					if err == nil {
+						bytes, _ := io.ReadAll(f)
+						f.Close()
+						base64Img := base64.StdEncoding.EncodeToString(bytes)
+						tx.Exec(`INSERT INTO gallery (detail_id, images) VALUES ($1,$2)`, detailID, base64Img)
+					}
+				}
+			}
+		}
+
+		// 2. UPDATE FASILITAS
+		if len(input.Fasilitas) > 0 {
+			// Delete old amenities
+			tx.Exec(`DELETE FROM fasilitas WHERE detail_id=$1`, detailID)
+
+			// Insert new amenities
+			for _, fas := range input.Fasilitas {
+				_, err := tx.Exec(`
+					INSERT INTO fasilitas (name, detail_id)
+					VALUES ($1,$2)
+				`, fas, detailID)
+				if err != nil {
+					tx.Rollback()
+					c.JSON(500, gin.H{"error": "Gagal update fasilitas: " + err.Error()})
+					return
+				}
+			}
+		}
 	}
 
 	tx.Commit()
@@ -355,12 +465,19 @@ func DeleteUnit(c *gin.Context) {
 		return
 	}
 
+<<<<<<< HEAD
 	// DELETE CHILD FIRST
 	tx.Exec(`DELETE FROM gallery WHERE detail_id=$1`, id)
 	tx.Exec(`DELETE FROM fasilitas WHERE detail_id=$1`, id)
 	tx.Exec(`DELETE FROM unit_detail WHERE detail_id=$1`, id)
 
 	// DELETE PARENT
+=======
+	// Let's rely on postgres ON DELETE CASCADE for detail tables if present.
+	// To be safe we try to delete detail first.
+	tx.Exec(`DELETE FROM unit_detail WHERE unit_id=$1`, id)
+
+>>>>>>> 066ada8a07e849331e6f01d7d8a824ba127bd2fe
 	_, err = tx.Exec(`DELETE FROM unit WHERE unit_id=$1`, id)
 	if err != nil {
 		tx.Rollback()
