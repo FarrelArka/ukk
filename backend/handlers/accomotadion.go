@@ -15,7 +15,6 @@ import (
 // =======================
 func CreateUnit(c *gin.Context) {
 	var input struct {
-<<<<<<< HEAD
 		Category    string `json:"category"`
 		StatusUnit  string `json:"status_unit"`
 		Description string `json:"description"`
@@ -28,18 +27,6 @@ func CreateUnit(c *gin.Context) {
 
 		Images    []string `json:"images"`
 		Fasilitas []string `json:"fasilitas"`
-=======
-		Category    string   `form:"category" json:"category"`
-		StatusUnit  string   `form:"status_unit" json:"status_unit"`
-		Description string   `form:"description" json:"description"`
-		Capacity    int      `form:"capacity" json:"capacity"`
-		Name        string   `form:"name" json:"name"`
-		Price       float64  `form:"price" json:"price"`
-		Alamat      string   `form:"alamat" json:"alamat"`
-		JumlahKamar int      `form:"jumlah_kamar" json:"jumlah_kamar"`
-		Images      []string `form:"images" json:"images"`
-		Fasilitas   []string `form:"fasilitas" json:"fasilitas"`
->>>>>>> 066ada8a07e849331e6f01d7d8a824ba127bd2fe
 	}
 
 	contentType := c.GetHeader("Content-Type")
@@ -237,7 +224,6 @@ func GetUnitByID(c *gin.Context) {
 	id := c.Param("id")
 
 	var u struct {
-<<<<<<< HEAD
 		UnitID      int    `json:"unit_id"`
 		Category    string `json:"category"`
 		StatusUnit  string `json:"status_unit"`
@@ -282,7 +268,6 @@ func GetUnitByID(c *gin.Context) {
 		&u.Kapasitas,
 	)
 
-
 	if err != nil {
 		c.JSON(404, gin.H{"message": "Unit tidak ditemukan"})
 		return
@@ -326,23 +311,15 @@ func UpdateAccommodation(c *gin.Context) {
 	id := c.Param("id")
 
 	var input struct {
-<<<<<<< HEAD
-		Name        string  `json:"name"`
-		Price       float64 `json:"price"`
-		Alamat      string  `json:"alamat"`
-		JumlahKamar int     `json:"jumlah_kamar"`
-		Kapasitas   int     `json:"kapasitas"`
-=======
 		Category    string   `form:"category" json:"category"`
 		StatusUnit  string   `form:"status_unit" json:"status_unit"`
 		Description string   `form:"description" json:"description"`
-		Capacity    int      `form:"capacity" json:"capacity"`
+		Kapasitas   int      `form:"kapasitas" json:"kapasitas"`
 		Name        string   `form:"name" json:"name"`
 		Price       float64  `form:"price" json:"price"`
 		Alamat      string   `form:"alamat" json:"alamat"`
 		JumlahKamar int      `form:"jumlah_kamar" json:"jumlah_kamar"`
 		Fasilitas   []string `form:"fasilitas" json:"fasilitas"`
->>>>>>> 066ada8a07e849331e6f01d7d8a824ba127bd2fe
 	}
 
 	contentType := c.GetHeader("Content-Type")
@@ -366,20 +343,11 @@ func UpdateAccommodation(c *gin.Context) {
 
 	// UPDATE DETAIL (INI YANG BENAR)
 	_, err = tx.Exec(`
-<<<<<<< HEAD
-		UPDATE unit_detail
-		SET name=$1,
-		    price=$2,
-		    alamat=$3,
-		    jumlah_kamar=$4,
-		    kapasitas=$5
-		WHERE detail_id=$6
-	`, input.Name, input.Price, input.Alamat, input.JumlahKamar, input.Kapasitas, id)
-=======
+
 		UPDATE unit
 		SET category=$1, status_unit=$2, description=$3, capacity=$4
 		WHERE unit_id=$5
-	`, input.Category, input.StatusUnit, input.Description, input.Capacity, id)
+	`, input.Category, input.StatusUnit, input.Description, input.Kapasitas, id)
 
 	if err != nil {
 		tx.Rollback()
@@ -392,7 +360,6 @@ func UpdateAccommodation(c *gin.Context) {
 		SET name=$1, price=$2, alamat=$3, jumlah_kamar=$4
 		WHERE unit_id=$5
 	`, input.Name, input.Price, input.Alamat, input.JumlahKamar, id)
->>>>>>> 066ada8a07e849331e6f01d7d8a824ba127bd2fe
 
 	if err != nil {
 		tx.Rollback()
@@ -465,19 +432,13 @@ func DeleteUnit(c *gin.Context) {
 		return
 	}
 
-<<<<<<< HEAD
 	// DELETE CHILD FIRST
 	tx.Exec(`DELETE FROM gallery WHERE detail_id=$1`, id)
 	tx.Exec(`DELETE FROM fasilitas WHERE detail_id=$1`, id)
 	tx.Exec(`DELETE FROM unit_detail WHERE detail_id=$1`, id)
 
 	// DELETE PARENT
-=======
-	// Let's rely on postgres ON DELETE CASCADE for detail tables if present.
-	// To be safe we try to delete detail first.
-	tx.Exec(`DELETE FROM unit_detail WHERE unit_id=$1`, id)
 
->>>>>>> 066ada8a07e849331e6f01d7d8a824ba127bd2fe
 	_, err = tx.Exec(`DELETE FROM unit WHERE unit_id=$1`, id)
 	if err != nil {
 		tx.Rollback()
