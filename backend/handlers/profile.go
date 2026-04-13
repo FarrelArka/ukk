@@ -1,9 +1,10 @@
-	package handlers
+package handlers
 
 import (
 	"net/http"
 
 	"go-backend-basic/config"
+
 	"github.com/gin-gonic/gin"
 )
 

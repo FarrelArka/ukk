@@ -17,20 +17,20 @@ func main() {
 
 	r := gin.Default()
 
-	// 🌐 CORS BEBAS SEMUA DOMAIN & PORT
+	// 🌐 CORS - izinkan semua origin (termasuk file://, XAMPP, Next.js)
 	r.Use(cors.New(cors.Config{
-		AllowCredentials: true,
-		AllowOrigins: []string{
-			"http://localhost:3000",
-		},
+		AllowAllOrigins: true,
 		AllowMethods: []string{
-			"GET", "POST", "PUT", "DELETE", "OPTIONS",
+			"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS",
 		},
 		AllowHeaders: []string{
 			"Origin",
 			"Content-Type",
 			"Authorization",
+			"Accept",
 		},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: false,
 	}))
 
 	// 🚀 ROUTES

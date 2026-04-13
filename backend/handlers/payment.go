@@ -224,7 +224,6 @@ func GetPaymentByBooking(c *gin.Context) {
 	})
 }
 
-
 // ========================
 // UPDATE PAYMENT STATUS (WEBHOOK SIMULATION)
 // ========================

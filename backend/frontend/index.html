@@ -33,10 +33,10 @@ async function login() {
     localStorage.setItem("token", data.token)
     localStorage.setItem("role", data.user.role)
 
-    if (data.user.role === "admin") {
-      window.location = "manage_unit.html"
+  if (data.user.role === "admin") {
+      window.location.href = "http://localhost:3000/admin/user-search?token=" + data.token;
     } else {
-      window.location = "dashboard.html"
+      window.location.href = "dashboard.html?token=" + data.token;
     }
   } else {
     msg.innerText = data.error
