@@ -19,9 +19,11 @@ type GoogleUser struct {
 
 func GoogleLogin(c *gin.Context) {
 	url := config.GoogleOAuthConfig.AuthCodeURL("state")
+
+	println("🔥 GOOGLE URL:", url) // WAJIB TARO DI SINI
+
 	c.Redirect(http.StatusTemporaryRedirect, url)
 }
-
 func GoogleCallback(c *gin.Context) {
 	code := c.Query("code")
 

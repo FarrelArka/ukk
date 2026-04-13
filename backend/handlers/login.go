@@ -60,6 +60,17 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "gagal generate token"})
 		return
 	}
+	c.SetSameSite(http.SameSiteLaxMode)
+
+	c.SetCookie(
+		"cookie", // nama cookie
+		token,    // isi JWT
+		3600*24,  // 1 hari
+		"/",
+		"",
+		false, // false karena masih http
+		true,  // httpOnly
+	)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "login berhasil",

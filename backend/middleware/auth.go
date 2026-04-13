@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -12,15 +11,14 @@ var jwtKey = []byte("SECRET_KEY_GANTI_NANTI")
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
 
-		if authHeader == "" {
+		// 🔥 AMBIL DARI COOKIE
+		tokenString, err := c.Cookie("cookie")
+		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "token tidak ada"})
 			c.Abort()
 			return
 		}
-
-		tokenString := strings.Replace(authHeader, "Bearer ", "", 1)
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			return jwtKey, nil
@@ -36,10 +34,8 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		c.Set("user_id", claims["user_id"])
 		c.Set("email", claims["email"])
-		c.Set("role", claims["role"]) // 🔥 INI YANG KURANG
-
+		c.Set("role", claims["role"])
 
 		c.Next()
 	}
 }
-

@@ -23,6 +23,7 @@ func CreateUnit(c *gin.Context) {
 		Price       float64 `json:"price"`
 		Alamat      string  `json:"alamat"`
 		JumlahKamar int     `json:"jumlah_kamar"`
+		Kapasitas   int     `json:"kapasitas"` // 🔥 TAMBAHAN
 
 		Images    []string `json:"images"`
 		Fasilitas []string `json:"fasilitas"`
@@ -140,9 +141,6 @@ func CreateUnit(c *gin.Context) {
 // =======================
 // READ ALL UNITS
 // =======================
-// =======================
-// READ ALL UNITS
-// =======================
 func GetUnits(c *gin.Context) {
 	rows, err := config.DB.Query(`
 		SELECT u.unit_id, u.category, u.status_unit, u.description,
@@ -167,6 +165,7 @@ func GetUnits(c *gin.Context) {
 		Price       float64  `json:"price"`
 		Alamat      string   `json:"alamat"`
 		JumlahKamar int      `json:"jumlah_kamar"`
+		Kapasitas   int      `json:"kapasitas"` // 🔥 TAMBAHAN
 		Gallery     []string `json:"images"`
 		Fasilitas   []string `json:"fasilitas"`
 	}
@@ -217,45 +216,76 @@ func GetUnitByID(c *gin.Context) {
 	id := c.Param("id")
 
 	var u struct {
-		UnitID      int      `json:"unit_id"`
-		Category    string   `json:"category"`
-		StatusUnit  string   `json:"status_unit"`
-		Description string   `json:"description"`
-		DetailID    int      `json:"detail_id"`
-		Name        string   `json:"name"`
-		Price       float64  `json:"price"`
-		Alamat      string   `json:"alamat"`
-		JumlahKamar int      `json:"jumlah_kamar"`
-		Gallery     []string `json:"images"`
-		Fasilitas   []string `json:"fasilitas"`
+		UnitID      int    `json:"unit_id"`
+		Category    string `json:"category"`
+		StatusUnit  string `json:"status_unit"`
+		Description string `json:"description"`
+
+		DetailID    int     `json:"detail_id"`
+		Name        string  `json:"name"`
+		Price       float64 `json:"price"`
+		Alamat      string  `json:"alamat"`
+		JumlahKamar int     `json:"jumlah_kamar"`
+		Kapasitas   int     `json:"kapasitas"`
+
+		Images    []string `json:"images"`
+		Fasilitas []string `json:"fasilitas"`
 	}
 
 	err := config.DB.QueryRow(`
-		SELECT u.unit_id, u.category, u.status_unit, u.description,
-		       d.detail_id, d.name, d.price, d.alamat, d.jumlah_kamar
+		SELECT 
+			u.unit_id, 
+			u.category, 
+			u.status_unit, 
+			u.description,
+			d.detail_id, 
+			d.name, 
+			d.price, 
+			d.alamat, 
+			d.jumlah_kamar,
+			d.kapasitas
 		FROM unit u
 		LEFT JOIN unit_detail d ON d.unit_id = u.unit_id
 		WHERE u.unit_id = $1
-	`, id).Scan(&u.UnitID, &u.Category, &u.StatusUnit, &u.Description,
-		&u.DetailID, &u.Name, &u.Price, &u.Alamat, &u.JumlahKamar)
+	`, id).Scan(
+		&u.UnitID,
+		&u.Category,
+		&u.StatusUnit,
+		&u.Description,
+		&u.DetailID,
+		&u.Name,
+		&u.Price,
+		&u.Alamat,
+		&u.JumlahKamar,
+		&u.Kapasitas,
+	)
+
 	if err != nil {
 		c.JSON(404, gin.H{"message": "Unit tidak ditemukan"})
 		return
 	}
 
-	// Ambil gallery
-	imgRows, _ := config.DB.Query(`SELECT images FROM gallery WHERE detail_id=$1`, u.DetailID)
-	u.Gallery = []string{}
+	// ===================
+	// GALLERY
+	// ===================
+	imgRows, _ := config.DB.Query(`
+		SELECT images FROM gallery WHERE detail_id=$1
+	`, u.DetailID)
+
 	for imgRows.Next() {
 		var img string
 		imgRows.Scan(&img)
-		u.Gallery = append(u.Gallery, img)
+		u.Images = append(u.Images, img)
 	}
 	imgRows.Close()
 
-	// Ambil fasilitas
-	fasRows, _ := config.DB.Query(`SELECT name FROM fasilitas WHERE detail_id=$1`, u.DetailID)
-	u.Fasilitas = []string{}
+	// ===================
+	// FASILITAS
+	// ===================
+	fasRows, _ := config.DB.Query(`
+		SELECT name FROM fasilitas WHERE detail_id=$1
+	`, u.DetailID)
+
 	for fasRows.Next() {
 		var f string
 		fasRows.Scan(&f)
@@ -274,11 +304,10 @@ func UpdateAccommodation(c *gin.Context) {
 
 	var input struct {
 		Name        string  `json:"name"`
-		Type        string  `json:"type"`
 		Price       float64 `json:"price"`
 		Alamat      string  `json:"alamat"`
 		JumlahKamar int     `json:"jumlah_kamar"`
-		Fasilitas   string  `json:"fasilitas"`
+		Kapasitas   int     `json:"kapasitas"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -292,23 +321,16 @@ func UpdateAccommodation(c *gin.Context) {
 		return
 	}
 
+	// UPDATE DETAIL (INI YANG BENAR)
 	_, err = tx.Exec(`
-		UPDATE accommodations
-		SET name=$1, type=$2, price=$3
-		WHERE id=$4
-	`, input.Name, input.Type, input.Price, id)
-
-	if err != nil {
-		tx.Rollback()
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-
-	_, err = tx.Exec(`
-		UPDATE unit_details
-		SET alamat=$1, jumlah_kamar=$2, fasilitas=$3
-		WHERE accommodation_id=$4
-	`, input.Alamat, input.JumlahKamar, input.Fasilitas, id)
+		UPDATE unit_detail
+		SET name=$1,
+		    price=$2,
+		    alamat=$3,
+		    jumlah_kamar=$4,
+		    kapasitas=$5
+		WHERE detail_id=$6
+	`, input.Name, input.Price, input.Alamat, input.JumlahKamar, input.Kapasitas, id)
 
 	if err != nil {
 		tx.Rollback()
@@ -317,13 +339,14 @@ func UpdateAccommodation(c *gin.Context) {
 	}
 
 	tx.Commit()
+
 	c.JSON(200, gin.H{"message": "Unit berhasil diupdate"})
 }
 
 // =======================
 // DELETE UNIT
 // =======================
-func DeleteAccommodation(c *gin.Context) {
+func DeleteUnit(c *gin.Context) {
 	id := c.Param("id")
 
 	tx, err := config.DB.Begin()
@@ -332,10 +355,13 @@ func DeleteAccommodation(c *gin.Context) {
 		return
 	}
 
-	tx.Exec(`DELETE FROM galleries WHERE accommodation_id=$1`, id)
-	tx.Exec(`DELETE FROM unit_details WHERE accommodation_id=$1`, id)
+	// DELETE CHILD FIRST
+	tx.Exec(`DELETE FROM gallery WHERE detail_id=$1`, id)
+	tx.Exec(`DELETE FROM fasilitas WHERE detail_id=$1`, id)
+	tx.Exec(`DELETE FROM unit_detail WHERE detail_id=$1`, id)
 
-	_, err = tx.Exec(`DELETE FROM accommodations WHERE id=$1`, id)
+	// DELETE PARENT
+	_, err = tx.Exec(`DELETE FROM unit WHERE unit_id=$1`, id)
 	if err != nil {
 		tx.Rollback()
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -343,5 +369,6 @@ func DeleteAccommodation(c *gin.Context) {
 	}
 
 	tx.Commit()
+
 	c.JSON(200, gin.H{"message": "Unit berhasil dihapus"})
 }

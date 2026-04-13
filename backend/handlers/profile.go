@@ -1,9 +1,10 @@
-	package handlers
+package handlers
 
 import (
 	"net/http"
 
 	"go-backend-basic/config"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,7 +18,7 @@ func Profile(c *gin.Context) {
 	var name, email string
 
 	err := config.DB.QueryRow(
-		"SELECT name, email FROM users WHERE id=$1",
+		"SELECT name, email FROM users WHERE id_user=$1",
 		userID,
 	).Scan(&name, &email)
 

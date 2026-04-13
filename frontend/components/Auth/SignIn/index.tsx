@@ -19,47 +19,38 @@ const Signin = ({ signInOpen }: { signInOpen?: (value: boolean) => void }) => {
   const [showPassword, setShowPassword] = useState(false);
 
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setLoading(true);
-    console.log("Attempting sign in with:", email);
-    
-    try {
-      const result = await signIn("credentials", {
-        redirect: false,
-        email,
-        password,
-      });
+  const handleSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(true);
 
-      console.log("SignIn result:", result);
+  try {
+    const res = await fetch("/api/login", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    email,
+    password,
+  }),
+});
 
-      if (result?.error) {
-        toast.error(result.error === "CredentialsSignin" ? "Invalid email or password" : result.error);
-        authDialog?.setIsFailedDialogOpen(true);
-        setTimeout(() => {
-          authDialog?.setIsFailedDialogOpen(false);
-        }, 1100);
-      } else if (result?.status === 200) {
-        toast.success("Successfully signed in!");
-        setTimeout(() => {
-          signInOpen?.(false);
-          window.location.href = "/"; // Force refresh to update session
-        }, 1200);
-        authDialog?.setIsSuccessDialogOpen(true);
-        setTimeout(() => {
-          authDialog?.setIsSuccessDialogOpen(false);
-        }, 1100);
-      } else {
-        toast.error("An unexpected error occurred");
-      }
-    } catch (err) {
-      console.error("SignIn exception:", err);
-      toast.error("Failed to sign in. Please try again.");
-    } finally {
-      setLoading(false);
+    if (!res.ok) {
+      throw new Error("Login gagal");
     }
-  };
 
+    toast.success("Login berhasil!");
+
+    setTimeout(() => {
+      window.location.href = "/"; // refresh biar fetch profile
+    }, 1000);
+
+  } catch (err) {
+    toast.error("Email / password salah");
+  } finally {
+    setLoading(false);
+  }
+};
   return (
     <>
     <div className="flex items-center justify-center gap-4 mb-10">

@@ -7,17 +7,48 @@ import NavLink from './Navigation/NavLink'
 import { useTheme } from 'next-themes'
 import { usePathname } from 'next/navigation'
 import Image from 'next/image'
-import { useSession, signOut } from 'next-auth/react'
 
-const Header: React.FC = () => {
+const Header = () => {
   const [sticky, setSticky] = useState(false)
   const [navbarOpen, setNavbarOpen] = useState(false)
   const { theme, setTheme } = useTheme()
   const pathname = usePathname()
   const isHomepage = pathname === '/'
-  const { data: session, status } = useSession()
 
-  const sideMenuRef = useRef<HTMLDivElement>(null)
+  const sideMenuRef = useRef(null)
+
+  // 🔥 AUTH STATE (GANTI NEXTAUTH)
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  // 🔥 FETCH USER DARI BACKEND
+  useEffect(() => {
+    fetch("http://localhost:5050/api/profile", {
+      credentials: "include",
+    })
+      .then(res => {
+        if (!res.ok) throw new Error()
+        return res.json()
+      })
+      .then(data => {
+        setUser(data)
+      })
+      .catch(() => {
+        setUser(null)
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  // 🔥 LOGOUT
+  const handleLogout = async () => {
+    await fetch("http://localhost:5050/logout", {
+      method: "POST",
+      credentials: "include",
+    })
+    setUser(null)
+  }
+
+
 
   const handleClickOutside = (event: MouseEvent) => {
     if (sideMenuRef.current && !sideMenuRef.current.contains(event.target as Node)) {
@@ -106,9 +137,9 @@ const Header: React.FC = () => {
                 <span className='hidden sm:block'>Menu</span>
               </button>
             </div>
-            {status === 'authenticated' && (
+            {user && (
               <div className='hidden sm:block'>
-                <Link href="/profile">
+                <div>
                   <Image
                     src='/images/header/avatar.png'
                     alt='avatar'
@@ -116,7 +147,7 @@ const Header: React.FC = () => {
                     height={40}
                     className='rounded-full hover:opacity-80 transition-opacity w-8 h-8 sm:w-10 sm:h-10 lg:w-[52px] lg:h-[52px]'
                   />
-                </Link>
+                </div>
               </div>
             )}
           </div>
@@ -161,7 +192,7 @@ const Header: React.FC = () => {
                 {navLinks.map((item, index) => (
                   <NavLink key={index} item={item} onClick={() => setNavbarOpen(false)} />
                 ))}
-                {status === 'unauthenticated' && (
+               {!loading && !user && (
                   <li className='flex items-center gap-4'>
                     <Link href="/signin" className='py-4 px-8 bg-primary text-base leading-4 block w-fit text-white rounded-full border border-primary font-semibold mt-3 hover:bg-transparent hover:text-primary duration-300 cursor-pointer'>
                       Sign In
@@ -171,10 +202,10 @@ const Header: React.FC = () => {
                     </Link>
                   </li>
                 )}
-                {status === 'authenticated' && (
+                {!loading && user && (
                   <li>
                     <button 
-                      onClick={() => signOut()}
+                      onClick={handleLogout}
                       className='py-4 px-8 bg-transparent border border-white text-base leading-4 block w-fit text-white rounded-full font-semibold mt-3 hover:bg-transparent hover:text-primary hover:border-primary duration-300 cursor-pointer'
                     >
                       Sign Out
@@ -196,7 +227,7 @@ const Header: React.FC = () => {
               +62 821-3145-9670{' '}
             </Link>
           </div>
-          {status === 'authenticated' && (
+          {user && (
             <div className='flex items-center gap-4 mb-6 sm:hidden'>
               <Link href="/profile" className='flex items-center gap-4' onClick={() => setNavbarOpen(false)}>
                 <Image
@@ -206,7 +237,7 @@ const Header: React.FC = () => {
                     height={40}
                     className='rounded-full'
                   />
-                  <span className='text-white font-medium'>{session?.user?.name || 'User'}</span>
+                  <span className='text-white font-medium'>{user?.name || 'User'}</span>
               </Link>
             </div>
           )}
