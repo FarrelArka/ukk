@@ -3,7 +3,7 @@ import { Bricolage_Grotesque } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from 'next-themes'
 import NextTopLoader from 'nextjs-toploader';
-import SessionProviderComp from '@/components/nextauth/SessionProvider'
+
 
 const font = Bricolage_Grotesque({ subsets: ["latin"] });
 
@@ -21,14 +21,14 @@ export default function RootLayout({
     <html lang='en' suppressHydrationWarning>
       <body className={`${font.className} bg-white dark:bg-black antialiased`}>
         <NextTopLoader color="#B0914F" />
-        <SessionProviderComp>
+    
           <ThemeProvider
             attribute='class'
             enableSystem={true}
             defaultTheme='light'>
             {children}
           </ThemeProvider>
-        </SessionProviderComp>
+   
       </body>
     </html>
   )

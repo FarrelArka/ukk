@@ -21,7 +21,7 @@ func AdminRoutes(auth *gin.RouterGroup) {
 		admin.GET("/accommodations/:id", handlers.GetUnitByID)
 		admin.POST("/accommodations", handlers.CreateUnit)
 		admin.PUT("/accommodations/:id", handlers.UpdateAccommodation)
-		admin.DELETE("/accommodations/:id", handlers.DeleteAccommodation)
+		admin.DELETE("/accommodations/:id", handlers.DeleteUnit)
 
 		// =========================
 		// USERS

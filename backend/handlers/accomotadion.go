@@ -25,6 +25,7 @@ func CreateUnit(c *gin.Context) {
 		JumlahKamar int      `form:"jumlah_kamar" json:"jumlah_kamar"`
 		Images      []string `form:"-" json:"images"`
 		Fasilitas   []string `form:"fasilitas" json:"fasilitas"`
+
 	}
 
 	contentType := c.GetHeader("Content-Type")
@@ -146,9 +147,6 @@ func CreateUnit(c *gin.Context) {
 // =======================
 // READ ALL UNITS
 // =======================
-// =======================
-// READ ALL UNITS
-// =======================
 func GetUnits(c *gin.Context) {
 	rows, err := config.DB.Query(`
 		SELECT u.unit_id, u.category, COALESCE(u.status_unit, ''), COALESCE(u.description, ''), COALESCE(u.capacity, 0),
@@ -174,6 +172,7 @@ func GetUnits(c *gin.Context) {
 		Price       float64  `json:"price"`
 		Alamat      string   `json:"alamat"`
 		JumlahKamar int      `json:"jumlah_kamar"`
+		Kapasitas   int      `json:"kapasitas"` // 🔥 TAMBAHAN
 		Gallery     []string `json:"images"`
 		Fasilitas   []string `json:"fasilitas"`
 	}
@@ -216,10 +215,6 @@ func GetUnits(c *gin.Context) {
 
 	c.JSON(http.StatusOK, data)
 }
-
-// =======================
-// READ UNIT BY ID
-// =======================
 func GetUnitByID(c *gin.Context) {
 	id := c.Param("id")
 
@@ -229,47 +224,87 @@ func GetUnitByID(c *gin.Context) {
 		StatusUnit  string   `json:"status_unit"`
 		Description string   `json:"description"`
 		Capacity    int      `json:"capacity"`
+
 		DetailID    int      `json:"detail_id"`
 		Name        string   `json:"name"`
 		Price       float64  `json:"price"`
 		Alamat      string   `json:"alamat"`
 		JumlahKamar int      `json:"jumlah_kamar"`
-		Gallery     []string `json:"images"`
-		Fasilitas   []string `json:"fasilitas"`
+
+		Images    []string `json:"images"`
+		Fasilitas []string `json:"fasilitas"`
 	}
 
 	err := config.DB.QueryRow(`
-		SELECT u.unit_id, u.category, COALESCE(u.status_unit, ''), COALESCE(u.description, ''), COALESCE(u.capacity, 0),
-		       COALESCE(d.detail_id, 0), COALESCE(d.name, ''), COALESCE(d.price, 0.0), COALESCE(d.alamat, ''), COALESCE(d.jumlah_kamar, 0)
+		SELECT 
+			u.unit_id, 
+			u.category, 
+			u.status_unit, 
+			u.description,
+			u.capacity,
+			d.detail_id, 
+			d.name, 
+			d.price, 
+			d.alamat, 
+			d.jumlah_kamar
 		FROM unit u
 		LEFT JOIN unit_detail d ON d.unit_id = u.unit_id
 		WHERE u.unit_id = ?
-	`, id).Scan(&u.UnitID, &u.Category, &u.StatusUnit, &u.Description, &u.Capacity,
-		&u.DetailID, &u.Name, &u.Price, &u.Alamat, &u.JumlahKamar)
+	`, id).Scan(
+		&u.UnitID, 
+		&u.Category, 
+		&u.StatusUnit, 
+		&u.Description,
+		&u.Capacity,
+		&u.DetailID, 
+		&u.Name, 
+		&u.Price, 
+		&u.Alamat, 
+		&u.JumlahKamar,
+	)
+
 	if err != nil {
-		c.JSON(404, gin.H{"message": "Unit tidak ditemukan"})
+		c.JSON(http.StatusNotFound, gin.H{"message": "Unit tidak ditemukan"})
 		return
 	}
 
-	// Ambil gallery
-	imgRows, _ := config.DB.Query(`SELECT image_url FROM gallery WHERE unit_id=?`, u.UnitID)
-	u.Gallery = []string{}
+	// ===================
+	// GALLERY
+	// ===================
+	imgRows, err := config.DB.Query(`SELECT image_url FROM gallery WHERE unit_id=?`, u.UnitID)
+	if err != nil {
+		c.JSON(500, gin.H{"message": "Gagal ambil gambar"})
+		return
+	}
+	defer imgRows.Close()
+
+	u.Images = []string{}
+
 	for imgRows.Next() {
 		var img string
-		imgRows.Scan(&img)
-		u.Gallery = append(u.Gallery, img)
+		if err := imgRows.Scan(&img); err == nil {
+			u.Images = append(u.Images, img)
+		}
 	}
-	imgRows.Close()
 
-	// Ambil fasilitas
-	fasRows, _ := config.DB.Query(`SELECT nama_fasilitas FROM fasilitas WHERE unit_id=?`, u.UnitID)
+	// ===================
+	// FASILITAS
+	// ===================
+	fasRows, err := config.DB.Query(`SELECT nama_fasilitas FROM fasilitas WHERE unit_id=?`, u.UnitID)
+	if err != nil {
+		c.JSON(500, gin.H{"message": "Gagal ambil fasilitas"})
+		return
+	}
+	defer fasRows.Close()
+
 	u.Fasilitas = []string{}
+
 	for fasRows.Next() {
 		var f string
-		fasRows.Scan(&f)
-		u.Fasilitas = append(u.Fasilitas, f)
+		if err := fasRows.Scan(&f); err == nil {
+			u.Fasilitas = append(u.Fasilitas, f)
+		}
 	}
-	fasRows.Close()
 
 	c.JSON(http.StatusOK, u)
 }
@@ -284,7 +319,7 @@ func UpdateAccommodation(c *gin.Context) {
 		Category    string   `form:"category" json:"category"`
 		StatusUnit  string   `form:"status_unit" json:"status_unit"`
 		Description string   `form:"description" json:"description"`
-		Capacity    int      `form:"capacity" json:"capacity"`
+		Capacity int `form:"capacity" json:"capacity"`
 		Name        string   `form:"name" json:"name"`
 		Price       float64  `form:"price" json:"price"`
 		Alamat      string   `form:"alamat" json:"alamat"`
@@ -311,11 +346,14 @@ func UpdateAccommodation(c *gin.Context) {
 		return
 	}
 
+	// UPDATE DETAIL (INI YANG BENAR)
 	_, err = tx.Exec(`
+
 		UPDATE unit
 		SET category=?, status_unit=?, description=?, capacity=?
 		WHERE unit_id=?
 	`, input.Category, input.StatusUnit, input.Description, input.Capacity, id)
+
 
 	if err != nil {
 		tx.Rollback()
@@ -339,55 +377,59 @@ func UpdateAccommodation(c *gin.Context) {
 	// UPDATE GALLERY & FASILITAS
 	// ===================
 
-		// 1. UPDATE GALLERY if images are uploaded
-		form, _ := c.MultipartForm()
-		if form != nil {
-			files := form.File["images"]
-			if len(files) > 0 {
-				// Delete old gallery entries
-				tx.Exec(`DELETE FROM gallery WHERE unit_id=?`, id)
+	// 1. UPDATE GALLERY if images are uploaded
+	form, _ := c.MultipartForm()
+	if form != nil {
+		files := form.File["images"]
+		if len(files) > 0 {
+			// Delete old gallery entries
+			tx.Exec(`DELETE FROM gallery WHERE unit_id=?`, id)
 
-				// Insert new images
-				for _, file := range files {
-					f, err := file.Open()
-					if err == nil {
-						bytes, _ := io.ReadAll(f)
-						f.Close()
-						base64Img := base64.StdEncoding.EncodeToString(bytes)
-						tx.Exec(`INSERT INTO gallery (unit_id, image_url) VALUES (?,?)`, id, base64Img)
-					}
+			// Insert new images
+			for _, file := range files {
+				f, err := file.Open()
+				if err == nil {
+					bytes, _ := io.ReadAll(f)
+					f.Close()
+					base64Img := base64.StdEncoding.EncodeToString(bytes)
+					tx.Exec(`INSERT INTO gallery (unit_id, image_url) VALUES (?,?)`, id, base64Img)
 				}
 			}
 		}
+	}
 
-		// 2. UPDATE FASILITAS
-		if len(input.Fasilitas) > 0 {
-			// Delete old amenities
-			tx.Exec(`DELETE FROM fasilitas WHERE unit_id=?`, id)
+	// 2. UPDATE FASILITAS
+	if len(input.Fasilitas) > 0 {
+		// Delete old amenities
+		tx.Exec(`DELETE FROM fasilitas WHERE unit_id=?`, id)
 
-			// Insert new amenities
-			for _, fas := range input.Fasilitas {
-				_, err := tx.Exec(`
+		// Insert new amenities
+		for _, fas := range input.Fasilitas {
+			_, err := tx.Exec(`
 					INSERT INTO fasilitas (nama_fasilitas, unit_id)
 					VALUES (?,?)
 				`, fas, id)
-				if err != nil {
-					tx.Rollback()
-					c.JSON(500, gin.H{"error": "Gagal update fasilitas: " + err.Error()})
-					return
-				}
+			if err != nil {
+				tx.Rollback()
+				c.JSON(500, gin.H{"error": "Gagal update fasilitas: " + err.Error()})
+				return
 			}
 		}
+	}
 
+	if err := tx.Commit(); err != nil {
+		tx.Rollback()
+		c.JSON(500, gin.H{"error": "Gagal commit: " + err.Error()})
+		return
+	}
 
-	tx.Commit()
 	c.JSON(200, gin.H{"message": "Unit berhasil diupdate"})
 }
 
 // =======================
 // DELETE UNIT
 // =======================
-func DeleteAccommodation(c *gin.Context) {
+func DeleteUnit(c *gin.Context) {
 	id := c.Param("id")
 
 	tx, err := config.DB.Begin()
@@ -396,8 +438,9 @@ func DeleteAccommodation(c *gin.Context) {
 		return
 	}
 
-	// Let's rely on postgres ON DELETE CASCADE for detail tables if present.
-	// To be safe we try to delete detail first.
+	// DELETE CHILD FIRST
+	tx.Exec(`DELETE FROM gallery WHERE unit_id=?`, id)
+	tx.Exec(`DELETE FROM fasilitas WHERE unit_id=?`, id)
 	tx.Exec(`DELETE FROM unit_detail WHERE unit_id=?`, id)
 
 	_, err = tx.Exec(`DELETE FROM unit WHERE unit_id=?`, id)
@@ -408,5 +451,6 @@ func DeleteAccommodation(c *gin.Context) {
 	}
 
 	tx.Commit()
+
 	c.JSON(200, gin.H{"message": "Unit berhasil dihapus"})
 }

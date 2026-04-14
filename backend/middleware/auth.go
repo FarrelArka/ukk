@@ -2,33 +2,30 @@ package middleware
 
 import (
 	"net/http"
-	"strings"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtKey = []byte("SECRET_KEY_GANTI_NANTI")
+var jwtKey = []byte(os.Getenv("JWT_SECRET"))
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// ✅ Skip OPTIONS preflight — jangan block CORS
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
 
-		authHeader := c.GetHeader("Authorization")
-
-		if authHeader == "" {
+		tokenString, err := c.Cookie("cookie")
+		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "token tidak ada"})
 			c.Abort()
 			return
 		}
 
-		tokenString := strings.Replace(authHeader, "Bearer ", "", 1)
-
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, http.ErrAbortHandler
+			}
+
 			return jwtKey, nil
 		})
 
@@ -38,14 +35,19 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		claims := token.Claims.(jwt.MapClaims)
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token claims"})
+			c.Abort()
+			return
+		}
 
-		c.Set("user_id", claims["user_id"])
+		userID := claims["user_id"]
+
+		c.Set("user_id", userID)
 		c.Set("email", claims["email"])
-		c.Set("role", claims["role"]) // 🔥 INI YANG KURANG
-
+		c.Set("role", claims["role"])
 
 		c.Next()
 	}
 }
-

@@ -18,7 +18,9 @@ func Profile(c *gin.Context) {
 	var name, email string
 
 	err := config.DB.QueryRow(
+
 		"SELECT name, email FROM users WHERE id=?",
+
 		userID,
 	).Scan(&name, &email)
 
