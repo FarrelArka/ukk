@@ -30,7 +30,7 @@ func Login(c *gin.Context) {
 	var hashedPassword string
 
 	err := config.DB.QueryRow(
-		"SELECT id_user, name, role, password FROM users WHERE email=$1",
+		"SELECT id, name, role, password FROM users WHERE email=?",
 		req.Email,
 	).Scan(&userID, &name, &role, &hashedPassword)
 

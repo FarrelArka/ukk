@@ -31,8 +31,8 @@ func AdminDashboard(c *gin.Context) {
 	rows, err := config.DB.Query(`
 		SELECT 
 			COALESCE(d.name, 'Unknown Unit'),
-			COALESCE(CAST(b.check_in AS VARCHAR), ''),
-			COALESCE(CAST(b.check_out AS VARCHAR), ''),
+			COALESCE(CAST(b.check_in AS CHAR), ''),
+			COALESCE(CAST(b.check_out AS CHAR), ''),
 			COALESCE(b.status_booking, 'pending')
 		FROM booking b
 		LEFT JOIN unit_detail d ON d.unit_id = b.unit_id

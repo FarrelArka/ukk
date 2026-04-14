@@ -49,25 +49,27 @@ func GoogleCallback(c *gin.Context) {
 	var role string
 
 	err = config.DB.QueryRow(
-		"SELECT id_user, role FROM users WHERE email=$1",
+		"SELECT id, role FROM users WHERE email=?",
 		user.Email,
 	).Scan(&id, &role)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
 
-			err = config.DB.QueryRow(
-				`INSERT INTO users (name, email, role)
-	 VALUES ($1,$2,'user')
-	 RETURNING id_user, role`,
+			res, err := config.DB.Exec(
+				`INSERT INTO users (name, email, role) VALUES (?, ?, 'user')`,
 				user.Name,
 				user.Email,
-			).Scan(&id, &role)
+			)
 
 			if err != nil {
 				c.JSON(500, gin.H{"error": "gagal insert user"})
 				return
 			}
+
+			lastID, _ := res.LastInsertId()
+			id = int(lastID)
+			role = "user"
 
 		} else {
 			c.JSON(500, gin.H{

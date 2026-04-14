@@ -8,6 +8,12 @@ import { useTheme } from 'next-themes'
 import { usePathname } from 'next/navigation'
 import Image from 'next/image'
 
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
 const Header = () => {
   const [sticky, setSticky] = useState(false)
   const [navbarOpen, setNavbarOpen] = useState(false)
@@ -15,10 +21,10 @@ const Header = () => {
   const pathname = usePathname()
   const isHomepage = pathname === '/'
 
-  const sideMenuRef = useRef(null)
+  const sideMenuRef = useRef<HTMLDivElement>(null)
 
   // 🔥 AUTH STATE (GANTI NEXTAUTH)
-  const [user, setUser] = useState(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   // 🔥 FETCH USER DARI BACKEND

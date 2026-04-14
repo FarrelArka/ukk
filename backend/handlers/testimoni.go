@@ -15,11 +15,9 @@ type TestimonialRequest struct {
 
 func autoMigrateTestimonial() {
 	// Memastikan kolom tambahan ada di table testimonial secara otomatis
-	config.DB.Exec(`
-		ALTER TABLE testimonial 
-		ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending',
-		ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-	`)
+	// MySQL compatibility: ADD COLUMN doesn't always support IF NOT EXISTS depending on version
+	config.DB.Exec(`ALTER TABLE testimonial ADD COLUMN status VARCHAR(50) DEFAULT 'pending'`)
+	config.DB.Exec(`ALTER TABLE testimonial ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`)
 }
 
 func CreateTestimonial(c *gin.Context) {
@@ -37,7 +35,7 @@ func CreateTestimonial(c *gin.Context) {
 	queryCheck := `
 	SELECT status
 	FROM booking
-	WHERE id_booking=$1 AND user_id=$2
+	WHERE id_booking=? AND user_id=?
 	`
 	err := config.DB.QueryRow(queryCheck, req.BookingID, userID).Scan(&status)
 	if err != nil {
@@ -51,7 +49,7 @@ func CreateTestimonial(c *gin.Context) {
 	}
 
 	var exists bool
-	checkReview := `SELECT EXISTS(SELECT 1 FROM testimonial WHERE booking_id=$1)`
+	checkReview := `SELECT EXISTS(SELECT 1 FROM testimonial WHERE booking_id=?)`
 	config.DB.QueryRow(checkReview, req.BookingID).Scan(&exists)
 
 	if exists {
@@ -62,7 +60,7 @@ func CreateTestimonial(c *gin.Context) {
 	queryInsert := `
 	INSERT INTO testimonial
 	(booking_id,rating,comment,status)
-	VALUES ($1,$2,$3,'active')
+	VALUES (?,?,?,'active')
 	`
 	_, err = config.DB.Exec(queryInsert, req.BookingID, req.Rating, req.Comment)
 	if err != nil {
@@ -77,14 +75,14 @@ func GetTestimonials(c *gin.Context) {
 	autoMigrateTestimonial()
 	rows, err := config.DB.Query(`
 	SELECT
-		t.id_testimoni,
+		t.id_testimonial,
 		COALESCE(t.rating, 0),
 		COALESCE(t.comment, ''),
-		COALESCE(CAST(t.created_at AS VARCHAR), ''),
+		COALESCE(CAST(t.created_at AS CHAR), ''),
 		COALESCE(u.name, 'Unknown')
 	FROM testimonial t
 	JOIN booking b ON b.id_booking = t.booking_id
-	JOIN users u ON u.id_user = b.user_id
+	JOIN users u ON u.id = b.user_id
 	WHERE t.status='active' OR t.status='approved'
 	ORDER BY t.created_at DESC
 	`)
@@ -127,17 +125,17 @@ func GetAllTestimonialsAdmin(c *gin.Context) {
 	autoMigrateTestimonial()
 	rows, err := config.DB.Query(`
 		SELECT 
-			t.id_testimoni, 
+			t.id_testimonial, 
 			COALESCE(b.user_id, 0), 
 			COALESCE(t.rating, 0), 
 			COALESCE(t.comment, ''), 
 			COALESCE(t.status, 'pending'), 
-			COALESCE(CAST(t.created_at AS VARCHAR), ''),
+			COALESCE(CAST(t.created_at AS CHAR), ''),
 			COALESCE(u.name, 'Unknown User') AS user_name,
 			COALESCE(d.name, 'Unknown Unit') AS unit_name
 		FROM testimonial t
 		LEFT JOIN booking b ON b.id_booking = t.booking_id
-		LEFT JOIN users u ON u.id_user = b.user_id
+		LEFT JOIN users u ON u.id = b.user_id
 		LEFT JOIN unit_detail d ON d.unit_id = b.unit_id
 		ORDER BY t.created_at DESC
 	`)
@@ -186,10 +184,10 @@ func GetTestimonialByID(c *gin.Context) {
 	id := c.Param("id")
 
 	row := config.DB.QueryRow(`
-		SELECT t.id_testimoni, COALESCE(b.id_user, 0), COALESCE(t.rating, 0), COALESCE(t.comment, ''), COALESCE(t.status, 'pending'), COALESCE(CAST(t.created_at AS VARCHAR), '')
+		SELECT t.id_testimonial, COALESCE(b.user_id, 0), COALESCE(t.rating, 0), COALESCE(t.comment, ''), COALESCE(t.status, 'pending'), COALESCE(CAST(t.created_at AS CHAR), '')
 		FROM testimonial t
 		LEFT JOIN booking b ON b.id_booking = t.booking_id
-		WHERE t.id_testimoni = $1
+		WHERE t.id_testimonial = ?
 	`, id)
 
 	var tid, userID, rating int
@@ -224,7 +222,7 @@ func UpdateTestimonial(c *gin.Context) {
 		return
 	}
 
-	query := `UPDATE testimonial SET rating=$1, comment=$2 WHERE id_testimoni=$3`
+	query := `UPDATE testimonial SET rating=?, comment=? WHERE id_testimonial=?`
 	result, err := config.DB.Exec(query, req.Rating, req.Comment, id)
 
 	if err != nil {
@@ -252,7 +250,7 @@ func UpdateTestimonialStatus(c *gin.Context) {
 		return
 	}
 
-	query := `UPDATE testimonial SET status=$1 WHERE id_testimoni=$2`
+	query := `UPDATE testimonial SET status=? WHERE id_testimonial=?`
 	result, err := config.DB.Exec(query, req.Status, id)
 
 	if err != nil {
@@ -270,7 +268,7 @@ func UpdateTestimonialStatus(c *gin.Context) {
 func DeleteTestimonial(c *gin.Context) {
 	id := c.Param("id")
 
-	query := `DELETE FROM testimonial WHERE id_testimoni=$1`
+	query := `DELETE FROM testimonial WHERE id_testimonial=?`
 	result, err := config.DB.Exec(query, id)
 
 	if err != nil {

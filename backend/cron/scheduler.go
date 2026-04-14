@@ -19,10 +19,10 @@ func H7ReminderJob() {
 SELECT u.email, b.invoice_number, b.check_in
 FROM booking b
 JOIN payment p ON p.booking_id = b.id_booking
-JOIN users u ON u.id_user = b.user_id
-WHERE p.payment_status = 'unpaid'
+JOIN users u ON u.id = b.user_id
+WHERE p.status_payment = 'unpaid'
 AND b.status_booking = 'pending'
-AND b.check_in - NOW() <= INTERVAL '7 days'
+AND b.check_in <= DATE_ADD(NOW(), INTERVAL 7 DAY)
 `)
 
 		for rows.Next() {
@@ -48,7 +48,7 @@ SELECT b.id_booking, u.email, b.invoice_number
 FROM booking b
 JOIN payment p ON p.booking_id = b.id_booking
 JOIN users u ON u.id_user = b.user_id
-WHERE p.payment_status = 'unpaid'
+WHERE p.status_payment = 'unpaid'
 AND b.check_in <= NOW()
 AND b.status_booking = 'pending'
 `)
@@ -59,8 +59,8 @@ AND b.status_booking = 'pending'
 
 			rows.Scan(&id, &email, &invoice)
 
-			config.DB.Exec(`UPDATE booking SET status_booking='cancelled' WHERE id_booking=$1`, id)
-			config.DB.Exec(`UPDATE payment SET payment_status='expired' WHERE booking_id=$1`, id)
+			config.DB.Exec(`UPDATE booking SET status_booking='cancelled' WHERE id_booking=?`, id)
+			config.DB.Exec(`UPDATE payment SET status_payment='expired' WHERE booking_id=?`, id)
 
 			body := services.BuildRefundEmail(invoice)
 			services.SendEmail(email, "Booking Dibatalkan", body)

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 
@@ -8,10 +9,9 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-
-
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		jwtKey := []byte(os.Getenv("JWT_SECRET"))
 
 		tokenString, err := c.Cookie("cookie")
 		if err != nil {
@@ -21,17 +21,10 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, http.ErrAbortHandler
 			}
-			
-			secret := os.Getenv("JWT_SECRET")
-			if secret == "" {
-				secret = "SECRET_KEY_GANTI_NANTI"
-			}
-
-			return []byte(secret), nil
+			return jwtKey, nil
 		})
 
 		if err != nil || !token.Valid {
@@ -48,10 +41,14 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		userID := claims["user_id"]
+		role := claims["role"]
+
+		// DEBUG LOG
+		fmt.Printf("AuthMiddleware: role found in token: %v\n", role)
 
 		c.Set("user_id", userID)
 		c.Set("email", claims["email"])
-		c.Set("role", claims["role"])
+		c.Set("role", role)
 
 		c.Next()
 	}
