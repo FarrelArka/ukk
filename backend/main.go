@@ -17,9 +17,9 @@ func main() {
 
 	r := gin.Default()
 
-	// 🌐 CORS - izinkan semua origin (termasuk file://, XAMPP, Next.js)
+	// 🌐 CORS - konfigurasi untuk menerima credentials dari origin frontend
 	r.Use(cors.New(cors.Config{
-		AllowAllOrigins: true,
+		AllowOrigins: []string{"http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173", "http://localhost:3001"},
 		AllowMethods: []string{
 			"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS",
 		},
@@ -30,7 +30,7 @@ func main() {
 			"Accept",
 		},
 		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: false,
+		AllowCredentials: true,
 	}))
 
 	// 🚀 ROUTES

@@ -8,7 +8,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtKey = []byte(os.Getenv("JWT_SECRET"))
+
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -25,8 +25,13 @@ func AuthMiddleware() gin.HandlerFunc {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, http.ErrAbortHandler
 			}
+			
+			secret := os.Getenv("JWT_SECRET")
+			if secret == "" {
+				secret = "SECRET_KEY_GANTI_NANTI"
+			}
 
-			return jwtKey, nil
+			return []byte(secret), nil
 		})
 
 		if err != nil || !token.Valid {

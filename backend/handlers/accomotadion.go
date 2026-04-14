@@ -56,7 +56,7 @@ func CreateUnit(c *gin.Context) {
 		INSERT INTO unit (category, status_unit, description, capacity, created_at)
 		VALUES ($1,$2,$3,$4,NOW())
 		RETURNING unit_id
-	`, input.Category, input.StatusUnit, input.Description, input.Capacity).Scan(&unitID)
+	`, input.Category, input.StatusUnit, input.Description, input.Kapasitas).Scan(&unitID)
 
 	if err != nil {
 		tx.Rollback()
