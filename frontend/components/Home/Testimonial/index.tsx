@@ -18,17 +18,21 @@ const Testimonial = () => {
     }, [api]);
 
     React.useEffect(() => {
-        fetch("http://localhost:5050/api/testimonials")
-            .then(res => res.json())
+        const backendURL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5050";
+        fetch(`${backendURL}/testimonials`)
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to fetch");
+                return res.json();
+            })
             .then(data => {
                 if (Array.isArray(data)) {
                     // Mapping data format backend to frontend shape
                     const mapped = data.map((t: any) => ({
-                        name: t.name,
-                        position: "Guest", // Default position
-                        review: t.comment,
-                        rating: t.rating,
-                        image: "/images/testimonial/johns.jpg" // Fallback image since DB has none
+                        name: t.name || "Guest",
+                        position: "Customer", 
+                        review: t.comment || "No comment provided.",
+                        rating: t.rating || 5,
+                        image: "/images/testimonial/johns.jpg" // Fallback image
                     }));
                     setTestimonials(mapped);
                 }
@@ -95,40 +99,22 @@ const Testimonial = () => {
                         <CarouselContent>
                             {testimonials.map((item, index) => (
                                 <CarouselItem key={index} className="mt-9">
-                                    <div className="lg:flex items-center gap-11">
-                                        <div className="flex flex-col sm:flex-row items-start gap-6 lg:gap-11 lg:pr-20">
-                                            <div>
-                                                <Icon icon="ph:house-simple" width={32} height={32} className="text-primary" />
+                                    <div className="max-w-4xl mx-auto">
+                                        <div className="flex flex-col items-center text-center gap-6 lg:gap-8">
+                                            <div className="bg-primary/10 p-4 rounded-full">
+                                                <Icon icon="ph:quotes-fill" width={40} height={40} className="text-primary" />
                                             </div>
-                                            <div>
-                                                <h4 className="text-white lg:text-3xl text-2xl">"{item.review}"</h4>
-                                                <div className="flex items-center mt-8 gap-6">
-                                                    <Image
-                                                        src={item.image}
-                                                        alt={item.name}
-                                                        width={80}
-                                                        height={80}
-                                                        className="rounded-full lg:hidden block object-cover aspect-square"
-                                                        unoptimized={true}
-                                                    />
-                                                    <div>
-                                                        <h6 className="text-white text-xm font-medium">{item.name}</h6>
-                                                        <p className="text-white/40 border p-1 px-2 rounded-lg text-xs mt-1 w-fit flex gap-1 items-center">
-                                                            {item.rating}/5 <Icon icon="ph:star-fill" className="text-yellow-400" />
-                                                        </p>
-                                                    </div>
+                                            <div className="space-y-6">
+                                                <h4 className="text-white text-2xl sm:text-3xl lg:text-4xl italic font-light leading-relaxed">
+                                                    "{item.review}"
+                                                </h4>
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <h6 className="text-white text-lg font-medium">{item.name}</h6>
+                                                    <p className="text-white/40 border border-white/20 p-1 px-3 rounded-full text-xs flex gap-1 items-center">
+                                                        {item.rating}/5 <Icon icon="ph:star-fill" className="text-yellow-400" />
+                                                    </p>
                                                 </div>
                                             </div>
-                                        </div>
-                                        <div className="w-full h-full rounded-2xl overflow-hidden hidden lg:block">
-                                            <Image
-                                                src={item.image}
-                                                alt={item.name}
-                                                width={440}
-                                                height={440}
-                                                className="object-cover aspect-square"
-                                                unoptimized={true}
-                                            />
                                         </div>
                                     </div>
                                 </CarouselItem>

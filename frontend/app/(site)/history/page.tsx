@@ -3,6 +3,7 @@
 import { Icon } from '@iconify/react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
 interface BookingHistoryItem {
   id: number;
@@ -11,32 +12,10 @@ interface BookingHistoryItem {
   price: string;
   checkIn: string;
   checkOut: string;
-  status: 'Completed' | 'Upcoming' | 'Cancelled';
+  status: 'Completed' | 'Upcoming' | 'Cancelled' | 'Pending Payment';
   image: string;
+  hasTestimonial: boolean;
 }
-
-const historyData: BookingHistoryItem[] = [
-  {
-    id: 1,
-    title: 'Villa',
-    name: 'Kelarisan Villa',
-    price: 'IDR 650,000,00',
-    checkIn: 'July 10, 2025',
-    checkOut: 'July 11, 2025',
-    status: 'Completed',
-    image: '/images/properties/property4/image-history.jpg', 
-  },
-  {
-    id: 2,
-    title: 'Guest House',
-    name: 'Comfort Unit',
-    price: 'IDR 350,000,00',
-    checkIn: 'September 20, 2026',
-    checkOut: 'September 21, 2026',
-    status: 'Completed',
-    image: '/images/properties/property2/image-history.jpg',
-  },
-];
 
 const HistoryCard = ({ item }: { item: BookingHistoryItem }) => {
   return (
@@ -48,6 +27,7 @@ const HistoryCard = ({ item }: { item: BookingHistoryItem }) => {
             alt={item.name}
             fill
             className='object-cover rounded-xl'
+            unoptimized={true}
           />
       </div>
 
@@ -73,20 +53,32 @@ const HistoryCard = ({ item }: { item: BookingHistoryItem }) => {
         </div>
 
         <div className='flex flex-col sm:flex-row justify-between items-center gap-4 mt-auto'>
-           <div className='flex items-center gap-2 text-green-600 font-semibold'>
-             <Icon icon="ph:check-circle-fill" width={24} height={24} />
+           <div className={`flex items-center gap-2 font-semibold ${
+             item.status === 'Cancelled' ? 'text-red-500' : 
+             item.status === 'Completed' ? 'text-green-600' : 
+             item.status === 'Pending Payment' ? 'text-orange-500' : 'text-blue-500'}`}>
+             <Icon icon={
+               item.status === 'Cancelled' ? "ph:x-circle-fill" : 
+               item.status === 'Completed' ? "ph:check-circle-fill" : "ph:clock-fill"
+             } width={24} height={24} />
              <span>{item.status}</span>
            </div>
            
-           <Link
-             href={{
-               pathname: '/testimonial',
-               query: { category: item.title, type: item.name },
-             }}
-             className='px-6 py-3 bg-[#B0914F] hover:bg-[#977c43] text-white rounded-full font-medium transition-colors text-sm'
-           >
-             Add Testimonial
-           </Link>
+           {(item.status === 'Completed' || item.hasTestimonial) && (
+             <Link
+               href={{
+                 pathname: '/testimonial',
+                 query: { 
+                    category: item.title, 
+                    type: item.name,
+                    bookingId: item.id
+                 },
+               }}
+               className='px-6 py-3 bg-[#B0914F] hover:bg-[#977c43] text-white rounded-full font-medium transition-colors text-sm shadow-lg'
+             >
+               {item.hasTestimonial ? 'Edit Testimonial' : 'Add Testimonial'}
+             </Link>
+           )}
         </div>
       </div>
     </div>
@@ -94,6 +86,96 @@ const HistoryCard = ({ item }: { item: BookingHistoryItem }) => {
 };
 
 export default function History() {
+  const [historyData, setHistoryData] = useState<BookingHistoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const backendURL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5050";
+        
+        const accRes = await fetch(`${backendURL}/accommodations`);
+        if (!accRes.ok) throw new Error('Failed to fetch properties');
+        const properties = await accRes.json();
+        
+        const bookRes = await fetch(`${backendURL}/api/booking/me`, {
+          credentials: 'include'
+        });
+        
+        if (!bookRes.ok) {
+           if (bookRes.status === 401) {
+             throw new Error('Please login to view history');
+           }
+           throw new Error('Failed to fetch bookings');
+        }
+        
+        const bookings = await bookRes.json();
+        
+        if (!bookings || bookings.length === 0) {
+          setHistoryData([]);
+          setLoading(false);
+          return;
+        }
+
+        const formatDate = (dateStr: string) => {
+          if (!dateStr) return '';
+          const date = new Date(dateStr);
+          return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        };
+
+        const mapped: BookingHistoryItem[] = bookings.map((b: any) => {
+          const prop = properties.find((p: any) => p.unit_id === b.unit_id);
+          
+          let statusText: 'Completed' | 'Upcoming' | 'Cancelled' | 'Pending Payment' = "Upcoming";
+          const lowerStatus = b.status_booking?.toLowerCase();
+          
+          if (lowerStatus === 'paid' || lowerStatus === 'completed' || lowerStatus === 'sukses') {
+             statusText = 'Completed';
+          } else if (lowerStatus === 'cancelled') {
+             statusText = 'Cancelled';
+          } else if (lowerStatus === 'pending' || lowerStatus === 'dp_pending') {
+             statusText = 'Pending Payment';
+          }
+          
+          let imageSrc = '/images/properties/property4/image-history.jpg';
+          if (prop && prop.images && prop.images.length > 0) {
+            const isBase64 = prop.images[0].length > 200 && !prop.images[0].startsWith('http');
+            imageSrc = (isBase64 && !prop.images[0].startsWith('data:')) ? `data:image/png;base64,${prop.images[0]}` : prop.images[0];
+          }
+
+          return {
+            id: b.id_booking,
+            title: prop ? prop.category : 'Accommodation',
+            name: prop ? prop.name : `Unit ${b.unit_id}`,
+            price: `IDR ${b.amount.toLocaleString('id-ID')}`,
+            checkIn: formatDate(b.check_in),
+            checkOut: formatDate(b.check_out),
+            status: statusText,
+            image: imageSrc,
+            hasTestimonial: b.has_testimonial || false,
+          };
+        });
+
+        setHistoryData(mapped);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+        <div className='container max-w-8xl mx-auto px-5 2xl:px-0 pt-32 md:pt-44 pb-14 md:pb-28 text-center'>
+            <p className="text-xl">Loading your booking history...</p>
+        </div>
+    );
+  }
+
   return (
     <div className='container max-w-8xl mx-auto px-5 2xl:px-0 pt-32 md:pt-44 pb-14 md:pb-28'>
       {/* Header */}
@@ -123,9 +205,22 @@ export default function History() {
 
       {/* List */}
       <div className='max-w-5xl mx-auto'>
-         {historyData.map((item) => (
-            <HistoryCard key={item.id} item={item} />
-         ))}
+         {error ? (
+             <div className="text-center p-10 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-xl">
+                 <p className="font-semibold text-xl mb-2">{error}</p>
+                 <Link href="/login" className="text-primary underline">Go to Login</Link>
+             </div>
+         ) : historyData.length === 0 ? (
+             <div className="text-center p-10 bg-gray-50 dark:bg-white/5 text-gray-500 rounded-xl">
+                 <Icon icon="ph:calendar-blank" className="mx-auto text-5xl mb-4 opacity-50" />
+                 <p className="font-medium text-xl">No booking history found.</p>
+                 <Link href="/properties" className="text-primary mt-4 inline-block hover:underline">Explore Accommodations</Link>
+             </div>
+         ) : (
+            historyData.map((item, index) => (
+                <HistoryCard key={`${item.id}-${index}`} item={item} />
+            ))
+         )}
       </div>
     </div>
   );

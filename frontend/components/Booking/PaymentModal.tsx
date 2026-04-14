@@ -23,7 +23,7 @@ interface PaymentModalProps {
 }
 
 type PaymentMethod = 'qris' | 'bank' | 'card' | null;
-type PaymentStep = 'confirmation' | 'qris_payment' | 'success';
+type PaymentStep = 'confirmation' | 'qris_payment' | 'bank_transfer' | 'card_payment' | 'success';
 
 const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, propertyImage, bookingId }: PaymentModalProps) => {
     const [step, setStep] = useState<PaymentStep>('confirmation');
@@ -31,6 +31,16 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
     const [isProcessing, setIsProcessing] = useState(false);
     const [timeLeft, setTimeLeft] = useState(60);
     const [qrUrl, setQrUrl] = useState<string>('');
+    const [vaNumber, setVaNumber] = useState<string>('');
+    const [copied, setCopied] = useState(false);
+
+    // Card details simulation
+    const [cardData, setCardData] = useState({
+        number: '',
+        expiry: '',
+        cvv: '',
+        name: ''
+    });
 
     const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
     if (isOpen !== prevIsOpen) {
@@ -40,6 +50,8 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
             setSelectedMethod(null);
             setIsProcessing(false);
             setTimeLeft(60);
+            setVaNumber('');
+            setCopied(false);
         }
     }
 
@@ -58,6 +70,12 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
 
     if (!isOpen) return null;
 
+    const handleCopy = (text: string) => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
     const handleProceed = async () => {
         if (!selectedMethod || !bookingId) return;
 
@@ -73,7 +91,7 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                 body: JSON.stringify({
                     booking_id: bookingId,
                     amount: rawAmount,
-                    payment_type: selectedMethod // 'qris' or 'bank'
+                    payment_type: selectedMethod === 'bank' ? 'bank_transfer' : selectedMethod
                 })
             });
 
@@ -90,13 +108,24 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                     setQrUrl(data.qr_url);
                 }
                 setStep('qris_payment');
-            } else {
-                setStep('success'); // Untuk bank transfer kita set success untuk simulasi / lanjutkan alur
+            } else if (selectedMethod === 'bank') {
+                setVaNumber(data.va_number || '123456789012');
+                setStep('bank_transfer');
+            } else if (selectedMethod === 'card') {
+                setStep('card_payment');
             }
         } catch (error) {
             setIsProcessing(false);
             alert("Error processing payment");
         }
+    };
+
+    const handleConfirmSimulation = () => {
+        setIsProcessing(true);
+        setTimeout(() => {
+            setIsProcessing(false);
+            setStep('success');
+        }, 1500);
     };
 
     const handleClose = () => {
@@ -113,7 +142,7 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200 ">
             <div className={cn(
                 "bg-white dark:bg-dark w-full rounded-[18px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]",
-                step === 'qris_payment' ? "max-w-md" : "max-w-2xl"
+                (step === 'qris_payment' || step === 'bank_transfer' || step === 'card_payment') ? "max-w-md" : "max-w-2xl"
             )}>
 
                 {/* Header */}
@@ -127,6 +156,16 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                         <>
                             <h2 className="text-2xl font-semibold text-black dark:text-white mb-2">QRIS Payment</h2>
                             <p className="text-black/50 dark:text-white/50 text-sm">Please scan the code within <span className="text-primary font-bold">{timeLeft}s</span></p>
+                        </>
+                    ) : step === 'bank_transfer' ? (
+                        <>
+                            <h2 className="text-2xl font-semibold text-black dark:text-white mb-2">Bank Transfer</h2>
+                            <p className="text-black/50 dark:text-white/50 text-sm">Transfer details for your booking</p>
+                        </>
+                    ) : step === 'card_payment' ? (
+                        <>
+                            <h2 className="text-2xl font-semibold text-black dark:text-white mb-2">Card Payment</h2>
+                            <p className="text-black/50 dark:text-white/50 text-sm">Enter your card details</p>
                         </>
                     ) : (
                         <div className="pt-6">
@@ -151,40 +190,22 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                 {/* Content */}
                 <div className="p-8 overflow-y-auto custom-scrollbar">
 
-                    {step === 'qris_payment' ? (
-                        /* QRIS Payment Screen */
+                    {step === 'qris_payment' && (
                         <div className="flex flex-col items-center text-center space-y-6">
-                            {/* Logo */}
                             <div className="w-16 h-16 relative">
-                                <Image
-                                    src="/images/header/logo.png"
-                                    alt="Manembah Logo"
-                                    fill
-                                    style={{ objectFit: 'contain' }}
-                                />
+                                <Image src="/images/header/logo.png" alt="Manembah Logo" fill style={{ objectFit: 'contain' }} />
                             </div>
-
                             <div className="space-y-1">
                                 <p className="text-sm font-medium tracking-widest text-black/60 dark:text-white/60">VILLA & GUEST HOUSE</p>
                                 <h3 className="text-4xl font-bold tracking-tighter text-black dark:text-white">MANEMBAH</h3>
                             </div>
-
                             <div className="py-4">
                                 <h4 className="text-xl font-bold tracking-wider text-black dark:text-white mb-4">SCAN TO BOOK</h4>
-                                {/* QR Code Image */}
                                 <div className="w-64 h-64 bg-white p-4 border border-black/5 mx-auto relative group overflow-hidden">
-                                    <Image
-                                        src={qrUrl || "/images/payment/qris.png"}
-                                        alt="QRIS Code"
-                                        fill
-                                        style={{ objectFit: 'contain' }}
-                                        className=""
-                                    />
-                                    {/* Scanning line animation */}
+                                    <Image src={qrUrl || "/images/payment/qris.png"} alt="QRIS Code" fill style={{ objectFit: 'contain' }} />
                                     <div className="absolute top-0 left-0 w-full h-1 bg-primary/60 shadow-[0_0_15px_rgba(176,145,79,0.8)] animate-scan z-10" />
                                 </div>
                             </div>
-
                             <div className="space-y-3 pt-4">
                                 <div className="flex items-center gap-3 text-black/70 dark:text-white/70">
                                     <Icon icon="ph:instagram-logo-bold" className="text-xl" />
@@ -196,8 +217,147 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                                 </div>
                             </div>
                         </div>
-                    ) : (
-                        /* Original Content (Confirmation or Success) */
+                    )}
+
+                    {step === 'bank_transfer' && (
+                        <div className="space-y-8">
+                            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-black/5">
+                                <div className="flex items-center gap-4">
+                                    <Image src="/images/payment/bank.png" alt="BCA" width={80} height={30} className="object-contain" />
+                                    <div>
+                                        <p className="font-semibold text-black dark:text-white">Bank BCA</p>
+                                        <p className="text-xs text-black/50 dark:text-white/50">Manembah Family Rest</p>
+                                    </div>
+                                </div>
+                                <div className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full">VA</div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <p className="text-sm text-black/50 dark:text-white/50">Virtual Account Number</p>
+                                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-black/5">
+                                    <span className="text-xl font-bold tracking-widest text-black dark:text-white">{vaNumber}</span>
+                                    <button 
+                                        onClick={() => handleCopy(vaNumber)}
+                                        className="p-2 hover:bg-primary/10 rounded-xl transition-colors text-primary flex items-center gap-2"
+                                    >
+                                        <Icon icon={copied ? "ph:check-bold" : "ph:copy-bold"} className="text-xl" />
+                                        <span className="text-xs font-bold uppercase">{copied ? 'Copied' : 'Copy'}</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="p-4 rounded-2xl bg-primary/5 border border-primary/20 space-y-3">
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-black/60 dark:text-white/60">Total Amount</span>
+                                    <span className="font-bold text-black dark:text-white">IDR {bookingDetails.totalPrice || bookingDetails.price}</span>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <p className="text-sm font-semibold text-black dark:text-white">Payment Instructions:</p>
+                                <ol className="text-sm text-black/60 dark:text-white/60 space-y-2 list-decimal pl-4">
+                                    <li>Open your m-BCA or go to nearest ATM.</li>
+                                    <li>Select <span className="font-medium">Transfer</span> &gt; <span className="font-medium">BCA Virtual Account</span>.</li>
+                                    <li>Enter VA Number above.</li>
+                                    <li>Confirm your transaction details and PIN.</li>
+                                </ol>
+                            </div>
+
+                            <button
+                                onClick={handleConfirmSimulation}
+                                disabled={isProcessing}
+                                className="w-full py-4 bg-primary text-white rounded-full font-bold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                            >
+                                {isProcessing ? <Icon icon="ph:spinner" className="animate-spin text-xl" /> : "I've Paid"}
+                            </button>
+                        </div>
+                    )}
+
+                    {step === 'card_payment' && (
+                        <div className="space-y-6">
+                            {/* Card Display */}
+                            <div className="relative w-full aspect-[1.6/1] bg-gradient-to-br from-gray-900 to-gray-700 rounded-2xl p-6 text-white overflow-hidden shadow-xl">
+                                <div className="absolute top-0 right-0 p-6">
+                                    <Icon icon="logos:visa" className="text-4xl" />
+                                </div>
+                                <div className="h-full flex flex-col justify-between relative z-10">
+                                    <div className="w-12 h-10 bg-yellow-400/80 rounded-lg" />
+                                    <div className="space-y-4">
+                                        <p className="text-xl tracking-[0.2em] font-mono">
+                                            {cardData.number || '•••• •••• •••• ••••'}
+                                        </p>
+                                        <div className="flex justify-between items-end">
+                                            <div>
+                                                <p className="text-[8px] uppercase opacity-60">Card Holder</p>
+                                                <p className="text-sm font-medium uppercase tracking-wider">{cardData.name || 'Your Name'}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-[8px] uppercase opacity-60">Expires</p>
+                                                <p className="text-sm font-medium">{cardData.expiry || 'MM/YY'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="absolute inset-0 bg-white/5 pointer-events-none" />
+                            </div>
+
+                            {/* Form Inputs */}
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs font-semibold text-black/50 dark:text-white/50 mb-1.5 block">CARD NUMBER</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="0000 0000 0000 0000"
+                                        className="w-full p-4 rounded-xl border border-black/10 dark:border-white/10 dark:bg-white/5 outline-none focus:border-primary transition-colors font-mono"
+                                        onChange={(e) => setCardData({...cardData, number: e.target.value.replace(/\W/gi, '').replace(/(.{4})/g, '$1 ').trim().slice(0, 19)})}
+                                        value={cardData.number}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs font-semibold text-black/50 dark:text-white/50 mb-1.5 block">EXPIRY DATE</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="MM/YY"
+                                            className="w-full p-4 rounded-xl border border-black/10 dark:border-white/10 dark:bg-white/5 outline-none focus:border-primary transition-colors font-mono"
+                                            onChange={(e) => setCardData({...cardData, expiry: e.target.value.replace(/[^\d/]/g, '').slice(0, 5)})}
+                                            value={cardData.expiry}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-semibold text-black/50 dark:text-white/50 mb-1.5 block">CVC/CVV</label>
+                                        <input 
+                                            type="password" 
+                                            placeholder="•••"
+                                            className="w-full p-4 rounded-xl border border-black/10 dark:border-white/10 dark:bg-white/5 outline-none focus:border-primary transition-colors font-mono"
+                                            onChange={(e) => setCardData({...cardData, cvv: e.target.value.replace(/\D/g, '').slice(0, 3)})}
+                                            value={cardData.cvv}
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-black/50 dark:text-white/50 mb-1.5 block">CARDHOLDER NAME</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Full Name"
+                                        className="w-full p-4 rounded-xl border border-black/10 dark:border-white/10 dark:bg-white/5 outline-none focus:border-primary transition-colors uppercase"
+                                        onChange={(e) => setCardData({...cardData, name: e.target.value})}
+                                        value={cardData.name}
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={handleConfirmSimulation}
+                                disabled={isProcessing || !cardData.number || !cardData.cvv}
+                                className="w-full py-4 bg-primary text-white rounded-full font-bold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                            >
+                                {isProcessing ? <Icon icon="ph:spinner" className="animate-spin text-xl" /> : "Pay Now"}
+                            </button>
+                        </div>
+                    )}
+
+                    {step === 'confirmation' || step === 'success' ? (
                         <>
                             <h3 className="text-2xl font-medium text-black dark:text-white mb-6">Booking Details</h3>
                             <hr className="border-black/10 dark:border-white/10 mb-6" />
@@ -211,6 +371,7 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                                             alt="Property"
                                             layout="fill"
                                             objectFit="cover"
+                                            unoptimized={true}
                                         />
                                     </div>
                                 )}
@@ -270,7 +431,7 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
 
                             {step === 'confirmation' && (
                                 <>
-                                    <h3 className="text-lg font-medium text-black dark:text-white mb-4">Select Payment Method</h3>
+                                    <h3 className="text-lg font-medium text-black dark:text-white my-6">Select Payment Method</h3>
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
                                         {/* QRIS */}
                                         <div
@@ -281,12 +442,7 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                                             onClick={() => setSelectedMethod('qris')}
                                         >
                                             <div className="relative w-24 h-24">
-                                                <Image
-                                                    src="/images/payment/qris.png"
-                                                    alt="QRIS"
-                                                    layout="fill"
-                                                    objectFit="contain"
-                                                />
+                                                <Image src="/images/payment/qris.png" alt="QRIS" layout="fill" objectFit="contain" unoptimized={true} />
                                             </div>
                                             <div className="text-center">
                                                 <p className="font-medium text-black dark:text-white">Scan QR Code</p>
@@ -303,17 +459,11 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                                             onClick={() => setSelectedMethod('bank')}
                                         >
                                             <div className="flex items-center justify-center p-2">
-                                                <Image
-                                                    src="/images/payment/bank.png"
-                                                    alt="Bank Transfer"
-                                                    width={160}
-                                                    height={40}
-                                                    className="object-contain"
-                                                />
+                                                <Image src="/images/payment/bank.png" alt="Bank Transfer" width={160} height={40} className="object-contain" unoptimized={true} />
                                             </div>
                                             <div className="text-center">
                                                 <p className="font-medium text-black dark:text-white">Bank Transfer</p>
-                                                <p className="text-xs text-black/50 dark:text-white/50">Manual Bank Transfer</p>
+                                                <p className="text-xs text-black/50 dark:text-white/50">BCA Virtual Account</p>
                                             </div>
                                         </div>
 
@@ -326,17 +476,11 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                                             onClick={() => setSelectedMethod('card')}
                                         >
                                             <div className="flex items-center justify-center p-2">
-                                                <Image
-                                                    src="/images/payment/card.png"
-                                                    alt="Credit Card"
-                                                    width={120}
-                                                    height={40}
-                                                    className="object-contain"
-                                                />
+                                                <Image src="/images/payment/card.png" alt="Credit Card" width={120} height={40} className="object-contain" unoptimized={true} />
                                             </div>
                                             <div className="text-center">
                                                 <p className="font-medium text-black dark:text-white">Credit / Debit Card</p>
-                                                <p className="text-xs text-black/50 dark:text-white/50">Pay with Card</p>
+                                                <p className="text-xs text-black/50 dark:text-white/50">Visa / Mastercard</p>
                                             </div>
                                         </div>
                                     </div>
@@ -360,7 +504,7 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                                 </button>
                             )}
                         </>
-                    )}
+                    ) : null}
                 </div>
             </div>
         </div>
