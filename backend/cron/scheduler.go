@@ -8,8 +8,35 @@ import (
 )
 
 func StartScheduler() {
+	go H1CheckInReminderJob()
 	go H7ReminderJob()
 	go AutoCancelUnpaidJob()
+}
+
+// H-1 Check-in Reminder
+func H1CheckInReminderJob() {
+	for {
+		rows, _ := config.DB.Query(`
+SELECT u.email, b.invoice_number, b.check_in
+FROM booking b
+JOIN users u ON u.id = b.user_id
+WHERE b.status_booking IN ('paid', 'dp_paid')
+AND DATE(b.check_in) = DATE(DATE_ADD(NOW(), INTERVAL 1 DAY))
+`)
+
+		for rows.Next() {
+			var email, invoice string
+			var checkIn time.Time
+
+			rows.Scan(&email, &invoice, &checkIn)
+
+			body := services.BuildCheckinReminderEmail(invoice, checkIn.Format("2006-01-02"))
+			services.SendEmail(email, "Pengingat Check-in (H-1)", body)
+		}
+		rows.Close()
+
+		time.Sleep(24 * time.Hour)
+	}
 }
 
 // H-7 Reminder

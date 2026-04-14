@@ -11,6 +11,7 @@ function BookingContent() {
   const category = searchParams.get('category') || '';
   const type = searchParams.get('type') || '';
   const price = searchParams.get('price') || '';
+  const capacity = searchParams.get('capacity') || '';
 
   return (
     <div className='container max-w-8xl mx-auto px-5 2xl:px-0 pt-32 md:pt-44 pb-14 md:pb-28'>
@@ -44,6 +45,7 @@ function BookingContent() {
           initialCategory={category}
           initialType={type}
           initialPrice={price}
+          initialCapacity={capacity}
         />
       </div>
     </div>

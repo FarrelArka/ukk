@@ -76,10 +76,11 @@ func CreateBooking(c *gin.Context) {
 	// AMBIL HARGA
 	// ========================
 	var hargaPerMalam float64
+	var kapasitas int
 	err = config.DB.QueryRow(
-		`SELECT price FROM unit_detail WHERE unit_id = ?`,
+		`SELECT d.price, u.capacity FROM unit_detail d JOIN unit u ON u.unit_id = d.unit_id WHERE d.unit_id = ?`,
 		req.UnitID,
-	).Scan(&hargaPerMalam)
+	).Scan(&hargaPerMalam, &kapasitas)
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "unit price not found"})
@@ -87,6 +88,12 @@ func CreateBooking(c *gin.Context) {
 	}
 
 	totalHarga := hargaPerMalam * float64(durasi)
+
+	extra := req.JumlahOrang - kapasitas
+	if extra > 0 {
+		totalHarga += float64(extra * 50000 * durasi)
+	}
+
 	invoice := GenerateInvoiceNumber()
 
 	// ========================
@@ -95,7 +102,7 @@ func CreateBooking(c *gin.Context) {
 	res, err := config.DB.Exec(`
 		INSERT INTO booking 
 		(user_id, unit_id, check_in, check_out, jumlah_orang, status_booking, invoice_number, total_price)
-		VALUES (?,?,?,?,?, 'pending', ?, ?)
+		VALUES (?,?,?,?,?, 'paid', ?, ?)
 	`,
 		userID,
 		req.UnitID,
@@ -113,6 +120,14 @@ func CreateBooking(c *gin.Context) {
 
 	id, _ := res.LastInsertId()
 	bookingID := int(id)
+
+	// ========================
+	// LANGSUNG CATAT SEBAGAI LUNAS DI PAYMENT
+	// ========================
+	config.DB.Exec(`
+		INSERT INTO payment (booking_id, amount, status_payment)
+		VALUES (?, ?, 'paid')
+	`, bookingID, totalHarga)
 
 	// ========================
 	// AMBIL EMAIL USER
@@ -135,7 +150,7 @@ func CreateBooking(c *gin.Context) {
 
 		// kirim async
 		go func() {
-			if err := services.SendEmail(userEmail, "Invoice Booking", body); err != nil {
+			if err := services.SendEmail(userEmail, "Invoice Booking - Sudah Bayar (Lunas)", body); err != nil {
 				fmt.Println("EMAIL ERROR:", err)
 			}
 		}()
@@ -148,7 +163,7 @@ func CreateBooking(c *gin.Context) {
 		"message":     "booking created",
 		"id_booking":  bookingID,
 		"invoice":     invoice,
-		"status":      "pending",
+		"status":      "paid",
 		"total_price": totalHarga,
 	})
 }
@@ -490,4 +505,49 @@ func ForceDeleteBooking(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "booking permanently deleted",
 	})
+}
+
+// ========================
+// GET BOOKED DATES BY UNIT (PUBLIC)
+// ========================
+
+func GetBookedDatesByUnit(c *gin.Context) {
+	unitID := c.Param("unit_id")
+
+	rows, err := config.DB.Query(`
+		SELECT 
+			CAST(check_in AS CHAR), CAST(check_out AS CHAR)
+		FROM booking
+		WHERE unit_id = ? AND status_booking != 'cancelled'
+	`, unitID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	type BookedRange struct {
+		CheckIn  string `json:"check_in"`
+		CheckOut string `json:"check_out"`
+	}
+
+	ranges := []BookedRange{}
+
+	for rows.Next() {
+		var r BookedRange
+		if err := rows.Scan(&r.CheckIn, &r.CheckOut); err != nil {
+			fmt.Println("Scan Error GetBookedDatesByUnit:", err)
+			continue
+		}
+		if len(r.CheckIn) >= 10 {
+			r.CheckIn = r.CheckIn[:10]
+		}
+		if len(r.CheckOut) >= 10 {
+			r.CheckOut = r.CheckOut[:10]
+		}
+		ranges = append(ranges, r)
+	}
+
+	c.JSON(http.StatusOK, ranges)
 }

@@ -4,15 +4,17 @@ import { useState, useEffect } from 'react';
 import { CustomSelect } from '@/components/ui/custom-select';
 import { useRouter } from "next/navigation";
 import PaymentModal from './PaymentModal';
+import DatePicker from './DatePicker';
 
 interface BookingFormProps {
   initialUnitId?: string;
   initialCategory?: string;
   initialType?: string;
   initialPrice?: string;
+  initialCapacity?: string;
 }
 
-const BookingForm = ({ initialUnitId = '', initialCategory = '', initialType = '', initialPrice = '' }: BookingFormProps) => {
+const BookingForm = ({ initialUnitId = '', initialCategory = '', initialType = '', initialPrice = '', initialCapacity = '' }: BookingFormProps) => {
   const [category, setCategory] = useState(initialCategory);
   const [type, setType] = useState(initialType);
   const [priceList, setPriceList] = useState(initialPrice);
@@ -27,8 +29,9 @@ const BookingForm = ({ initialUnitId = '', initialCategory = '', initialType = '
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [capacity, setCapacity] = useState('');
+  const [capacity, setCapacity] = useState(initialCapacity);
   const [propertyImage, setPropertyImage] = useState<string | undefined>(undefined);
+  const [bookedDates, setBookedDates] = useState<string[]>([]);
 
   useEffect(() => {
     fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5050"}/api/profile`, {
@@ -39,9 +42,9 @@ const BookingForm = ({ initialUnitId = '', initialCategory = '', initialType = '
         return res.json();
       })
       .then((data) => {
-        if (data && data.user) {
-          setName(data.user.name || "");
-          setEmail(data.user.email || "");
+        if (data && data.name) {
+          setName(data.name || "");
+          setEmail(data.email || "");
         }
       })
       .catch((err) => {
@@ -65,6 +68,30 @@ const BookingForm = ({ initialUnitId = '', initialCategory = '', initialType = '
       .catch(() => { });
   }, [unitId]);
 
+  // Fetch booked dates for this unit
+  useEffect(() => {
+    if (!unitId) return;
+    fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'}/bookings/unit/${unitId}/dates`)
+      .then(res => res.json())
+      .then((ranges: { check_in: string; check_out: string }[]) => {
+        const dates: string[] = [];
+        ranges.forEach(r => {
+          const start = new Date(r.check_in + 'T00:00:00');
+          const end = new Date(r.check_out + 'T00:00:00');
+          const cur = new Date(start);
+          while (cur <= end) {
+            const y = cur.getFullYear();
+            const m = String(cur.getMonth() + 1).padStart(2, '0');
+            const d = String(cur.getDate()).padStart(2, '0');
+            dates.push(`${y}-${m}-${d}`);
+            cur.setDate(cur.getDate() + 1);
+          }
+        });
+        setBookedDates(dates);
+      })
+      .catch(() => { });
+  }, [unitId]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsPaymentModalOpen(true);
@@ -81,6 +108,48 @@ const BookingForm = ({ initialUnitId = '', initialCategory = '', initialType = '
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   };
+
+  // Helper to get duration in days
+  const getDurasi = () => {
+    if (!checkInDate || !checkOutDate) return 1;
+    const durasi = Math.max(1, (new Date(checkOutDate).getTime() - new Date(checkInDate).getTime()) / (1000 * 3600 * 24));
+    return durasi;
+  };
+
+  // Helper to get extra price (50k per extra guest over capacity)
+  const getExtraPrice = () => {
+    const qtyGuests = parseInt(guests) || 0;
+    const cap = parseInt(capacity) || 0;
+    const extra = qtyGuests - cap;
+    if (extra > 0) {
+      return extra * 50000;
+    }
+    return 0;
+  };
+
+  // Helper to parse price string safely supporting K and M suffixes
+  const parsePrice = (p: string | undefined) => {
+    if (!p) return 0;
+    const str = p.toString().toUpperCase();
+    const num = parseFloat(str.replace(/[^0-9.]/g, '')) || 0;
+    if (str.includes('M')) return num * 1000000;
+    if (str.includes('K')) return num * 1000;
+    // fallback if no suffix, but we might have parsed "425.000" which would be 425, so we should let it process normally.
+    // However, replace(/\D/g) is safer if it's just raw number 425000.
+    const rawNum = parseInt(str.replace(/\D/g, '')) || 0;
+    return rawNum;
+  };
+
+  // Compute total price
+  const getTotalPrice = () => {
+    const rawPrice = parsePrice(initialPrice) || parsePrice(priceList);
+    const extraPrice = getExtraPrice();
+    const durasi = getDurasi();
+    return (rawPrice + extraPrice) * durasi;
+  };
+
+  const formattedTotalPrice = getTotalPrice().toLocaleString('id-ID');
+  const formattedRawPrice = (parsePrice(initialPrice) || parsePrice(priceList)).toLocaleString('id-ID');
 
   return (
     <>
@@ -130,19 +199,20 @@ const BookingForm = ({ initialUnitId = '', initialCategory = '', initialType = '
           <div className='flex flex-col lg:flex-row gap-6 w-full'>
             <div className='w-full space-y-3'>
               <label
-                htmlFor='capacity'
+                htmlFor='phoneNumber'
                 className='block mb-2 text-base font-medium text-black dark:text-white'
               >
                 Capacity
               </label>
               <input
-                type='number'
-                name='capacity'
-                id='capacity'
+                type='tel'
+                name='setCapacity'
+                id='setCapacity'
                 value={capacity}
                 onChange={(e) => setCapacity(e.target.value)}
-                placeholder='Enter capacity *'
+                placeholder='Enter your phone number *'
                 className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent text-black dark:text-white placeholder:text-black/50 dark:placeholder:text-white/50'
+                readOnly
               />
             </div>
             <div className='w-full space-y-3'>
@@ -173,14 +243,19 @@ const BookingForm = ({ initialUnitId = '', initialCategory = '', initialType = '
               >
                 Check-in Date
               </label>
-              <input
-                type='date'
-                name='checkIn'
+              <DatePicker
                 id='checkIn'
+                name='checkIn'
                 value={checkInDate}
-                onChange={(e) => setCheckInDate(e.target.value)}
-                placeholder='Select your check-in date'
-                className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent text-black dark:text-white placeholder:text-black/50 dark:placeholder:text-white/50'
+                onChange={(date) => {
+                  setCheckInDate(date);
+                  // Reset check-out if it's before new check-in
+                  if (checkOutDate && checkOutDate <= date) {
+                    setCheckOutDate('');
+                  }
+                }}
+                disabledDates={bookedDates}
+                placeholder='Select check-in date'
               />
             </div>
             <div className='w-full space-y-3'>
@@ -190,14 +265,14 @@ const BookingForm = ({ initialUnitId = '', initialCategory = '', initialType = '
               >
                 Check-out Date
               </label>
-              <input
-                type='date'
-                name='checkOut'
+              <DatePicker
                 id='checkOut'
+                name='checkOut'
                 value={checkOutDate}
-                onChange={(e) => setCheckOutDate(e.target.value)}
-                placeholder='Select your check-out date'
-                className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent text-black dark:text-white placeholder:text-black/50 dark:placeholder:text-white/50'
+                onChange={(date) => setCheckOutDate(date)}
+                disabledDates={bookedDates}
+                placeholder='Select check-out date'
+                minDate={checkInDate || undefined}
               />
             </div>
           </div>
@@ -276,7 +351,7 @@ const BookingForm = ({ initialUnitId = '', initialCategory = '', initialType = '
                   type='text'
                   name='priceList'
                   id='priceList'
-                  value={`IDR ${priceList}`}
+                  value={`IDR ${formattedRawPrice}`}
                   readOnly
                   className='px-6 py-3.5 border border-black/10 dark:border-white/10 rounded-full outline-primary focus:outline w-full bg-transparent opacity-70 text-black dark:text-white cursor-not-allowed'
                 />
@@ -327,7 +402,9 @@ const BookingForm = ({ initialUnitId = '', initialCategory = '', initialType = '
         bookingDetails={{
           category: category,
           type: type,
-          price: priceList,
+          price: formattedRawPrice,
+          totalPrice: formattedTotalPrice,
+          guests: parseInt(guests) || 0,
           checkIn: formatDate(checkInDate),
           checkOut: formatDate(checkOutDate),
         }}

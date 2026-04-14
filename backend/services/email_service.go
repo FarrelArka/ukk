@@ -60,9 +60,9 @@ func BuildInvoiceEmail(invoice, unit, checkIn, checkOut string) string {
 	<p><b>Unit:</b> %s</p>
 	<p><b>Check-in:</b> %s</p>
 	<p><b>Check-out:</b> %s</p>
-	<p><b>Status:</b> UNPAID</p>
+	<p><b>Status:</b> LUNAS</p>
 	<br>
-	<p>Silakan selesaikan pembayaran sebelum H-7 agar booking tidak dibatalkan.</p>
+	<p>Terima kasih telah melakukan pemesanan. Pembayaran Anda telah kami terima (Lunas).</p>
 	`, invoice, unit, checkIn, checkOut)
 }
 
@@ -95,4 +95,20 @@ func BuildRefundEmail(invoice string) string {
 	<p>Booking Anda telah dibatalkan.</p>
 	<p>Dana akan dikembalikan sesuai kebijakan refund.</p>
 	`, invoice)
+}
+
+// ========================
+// BUILD CHECK-IN REMINDER EMAIL
+// ========================
+
+func BuildCheckinReminderEmail(invoice, checkIn string) string {
+	return fmt.Sprintf(`
+	<h2>Pengingat Check-in (H-1)</h2>
+	<hr>
+	<p><b>Invoice:</b> %s</p>
+	<p><b>Check-in:</b> %s</p>
+	<br>
+	<p>Halo, ini adalah pengingat bahwa jadwal check-in Anda adalah esok hari.</p>
+	<p>Kami tunggu kedatangan Anda di lokasi kami!</p>
+	`, invoice, checkIn)
 }

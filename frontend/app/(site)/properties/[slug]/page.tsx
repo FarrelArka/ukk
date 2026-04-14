@@ -11,6 +11,7 @@ interface PropertyDetail {
     category: string;
     alamat: string;
     price: number;
+    capacity: number;
     jumlah_kamar: number;
     fasilitas: string[];
     images: string[];
@@ -85,7 +86,8 @@ export default function Details() {
                         name: found.name || "Accommodation",
                         location: found.alamat || "Blitar",
                         detailLocation: found.alamat || "Blitar",
-                        price: rate,
+                        price: priceRaw,
+                        capacity: found.capacity || 1,
                         rate: rate,
                         beds: found.jumlah_kamar || 2,
                         baths: getFasilitasCount('mandi') || 1,
@@ -249,7 +251,11 @@ export default function Details() {
                             <p className='text-sm text-white/50 dark:text-white'>Discounted Price</p>
                             <Link
                                 href={user
-                                    ? `/booking?category=${encodeURIComponent(item?.type || '')}&type=${encodeURIComponent(item?.name || '')}&price=${encodeURIComponent(item?.price || '')}`
+                                    ? `/booking?unit_id=${encodeURIComponent(item?.slug || '')}
+                                        &category=${encodeURIComponent(item?.type || '')}
+                                        &type=${encodeURIComponent(item?.name || '')}
+                                        &price=${encodeURIComponent(item?.price || '')}
+                                        &capacity=${encodeURIComponent(item?.capacity || '')}`
                                     : '/signup'
                                 }
                                 className='py-4 px-8 bg-primary text-white rounded-full w-full block text-center hover:bg-white duration-300 text-base mt-8 hover:cursor-pointer hover:text-primary'
