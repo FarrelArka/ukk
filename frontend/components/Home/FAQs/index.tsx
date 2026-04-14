@@ -14,7 +14,7 @@ const FAQ: React.FC = () => {
                 <div className="grid lg:grid-cols-2 gap-10 ">
                     <div className='lg:mx-0 mx-auto'>
                         <Image
-                            src="/images/faqs/faq-image.png"
+                            src="/images/faqs/Grid.png"
                             alt='image'
                             width={680}
                             height={644}

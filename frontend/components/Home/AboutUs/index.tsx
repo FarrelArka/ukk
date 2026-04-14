@@ -45,15 +45,13 @@ const Categories = () => {
             <div className="relative rounded-2xl overflow-hidden group">
               <Link href="/">
                 <Image
-                  src="/images/categories/villas-1.jpg"
+                  src="/images/hero/Home.jpeg"
                   alt="villas"
                   width={680}
                   height={386}
-                  className="w-full h-[240px] sm:h-[280px] md:h-auto object-cover"
+                  className="w-full h-[240px] sm:h-[280px] md:h-[320px] lg:h-[386px] object-cover"
                   unoptimized={true}
                 />
-              </Link>
-              <Link href="/">
               </Link>
             </div>
           </div>
@@ -61,11 +59,11 @@ const Categories = () => {
             <div className="relative rounded-2xl overflow-hidden group">
               <Link href="/properties/classic-unit">
                 <Image
-                  src="/images/categories/villas-2.jpg"
+                  src="/images/hero/1.jpg"
                   alt="villas"
                   width={680}
                   height={386}
-                  className="w-full h-[240px] sm:h-[280px] md:h-auto object-cover"
+                  className="w-full h-[240px] sm:h-[280px] md:h-[320px] lg:h-[386px] object-cover"
                   unoptimized={true}
                 />
               </Link>
@@ -90,11 +88,11 @@ const Categories = () => {
             <div className="relative rounded-2xl overflow-hidden group">
               <Link href="/properties/classic-unit">
                 <Image
-                  src="/images/categories/villas-3.jpg"
+                  src="/images/hero/2.jpg"
                   alt="villas"
                   width={320}
                   height={386}
-                  className="w-full h-[240px] sm:h-[280px] md:h-auto object-cover"
+                  className="w-full h-[240px] sm:h-[280px] md:h-[320px] lg:h-[386px] object-cover"
                   unoptimized={true}
                 />
               </Link>
@@ -119,11 +117,11 @@ const Categories = () => {
             <div className="relative rounded-2xl overflow-hidden group">
               <Link href="/properties/comfort-unit">
                 <Image
-                  src="/images/categories/villas-4.jpg"
+                  src="/images/hero/3.jpg"
                   alt="office"
                   width={320}
                   height={386}
-                  className="w-full h-[240px] sm:h-[280px] md:h-auto object-cover"
+                  className="w-full h-[240px] sm:h-[280px] md:h-[320px] lg:h-[386px] object-cover"
                   unoptimized={true}
                 />
               </Link>
