@@ -4,11 +4,11 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"os"
 )
 
-var jwtKey = []byte("SECRET_KEY_GANTI_NANTI")
-
 func GenerateToken(userID int, email string, role string) (string, error) {
+	jwtKey := []byte(os.Getenv("JWT_SECRET"))
 	claims := jwt.MapClaims{
 		"user_id": userID,
 		"email":   email,

@@ -19,30 +19,40 @@ const Signin = ({ signInOpen }: { signInOpen?: (value: boolean) => void }) => {
   const [showPassword, setShowPassword] = useState(false);
 
 
-  const handleSubmit = async (e) => {
+const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   setLoading(true);
 
   try {
     const res = await fetch("/api/login", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    email,
-    password,
-  }),
-});
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await res.json();
 
     if (!res.ok) {
-      throw new Error("Login gagal");
+      throw new Error(data.error || "Login gagal");
     }
 
     toast.success("Login berhasil!");
 
+    // ✅ simpan token & role
+    if (data.token) {
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("role", data.user.role);
+    }
+
+    // ✅ redirect berdasarkan role
     setTimeout(() => {
-      window.location.href = "/"; // refresh biar fetch profile
+      if (data.user?.role === "admin") {
+        window.location.href = "http://localhost:3001/";
+      } else {
+        window.location.href = "/";
+      }
     }, 1000);
 
   } catch (err) {

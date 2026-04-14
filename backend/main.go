@@ -12,14 +12,20 @@ func main() {
 	// 🔥 CONNECT DATABASE
 	config.ConnectDB()
 
-	// 🔐 INIT GOOGLE CONFIG (ambil dari config/google.go)
-	config.InitGoogleOAuth() // <- sesuaikan nama func lu
+	// 🔐 INIT GOOGLE CONFIG
+	config.InitGoogleOAuth()
 
 	r := gin.Default()
 
-	// 🌐 CORS - izinkan semua origin (termasuk file://, XAMPP, Next.js)
+	// =========================
+	// 🌐 CORS (FIX TOTAL)
+	// =========================
 	r.Use(cors.New(cors.Config{
-		AllowAllOrigins: true,
+		AllowOrigins: []string{
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"http://localhost:5500",
+		},
 		AllowMethods: []string{
 			"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS",
 		},
@@ -28,13 +34,22 @@ func main() {
 			"Content-Type",
 			"Authorization",
 			"Accept",
+			"X-Requested-With",
 		},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: false,
+		ExposeHeaders: []string{
+			"Content-Length",
+		},
+		AllowCredentials: true,
+		MaxAge:           12 * 3600,
 	}))
 
+	// =========================
 	// 🚀 ROUTES
+	// =========================
 	routes.SetupRoutes(r)
 
+	// =========================
+	// 🚀 RUN SERVER
+	// =========================
 	r.Run(":5050")
 }

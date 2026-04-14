@@ -42,10 +42,11 @@ func Register(c *gin.Context) {
 
 	// insert ke DB
 	_, err = config.DB.Exec(
-		"INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
+		"INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
 		req.Name,
 		strings.ToLower(req.Email),
 		string(hashedPassword),
+		"user",
 	)
 
 	if err != nil {
