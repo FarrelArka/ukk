@@ -21,4 +21,5 @@ func PublicRoutes(r *gin.Engine) {
 
 	// PUBLIC READ
 	r.GET("/accommodations", handlers.GetUnits)
+	r.GET("/testimonials", handlers.GetTestimonials)
 }

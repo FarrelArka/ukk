@@ -7,6 +7,7 @@ import { Suspense } from 'react';
 
 function BookingContent() {
   const searchParams = useSearchParams();
+  const unitId = searchParams.get('unit_id') || '';
   const category = searchParams.get('category') || '';
   const type = searchParams.get('type') || '';
   const price = searchParams.get('price') || '';
@@ -39,6 +40,7 @@ function BookingContent() {
       {/* form */}
       <div className='border border-black/10 dark:border-white/10 rounded-2xl p-4 sm:p-10 shadow-xl dark:shadow-white/10 max-w-5xl mx-auto'>
         <BookingForm 
+          initialUnitId={unitId}
           initialCategory={category}
           initialType={type}
           initialPrice={price}

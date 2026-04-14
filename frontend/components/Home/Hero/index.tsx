@@ -1,14 +1,64 @@
 import Image from "next/image"
 import Link from "next/link"
 
-export default function HeroSection() {
+export default async function HeroSection() {
+  let unit: any = null;
+
+  try {
+    const res = await fetch("http://localhost:5050/accommodations", { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      
+      const villaData = data.find((item: any) => item.category && item.category.toLowerCase() === 'villa');
+      
+      if (villaData) {
+        unit = villaData;
+      } else if (data && data.length > 0) {
+        unit = data[0]; 
+      }
+    }
+  } catch (error) {
+    console.error("Gagal fetch data unit:", error);
+  }
+
+  // Helper untuk mengekstrak angka dari array fasilitas (contoh mencari "Kamar Mandi")
+  const getFasilitasCount = (keyword: string) => {
+    if (!unit || !unit.fasilitas) return null;
+    const found = unit.fasilitas.find((f: string) => f.toLowerCase().includes(keyword));
+    if (found) {
+      const match = found.match(/\d+/);
+      return match ? match[0] : null;
+    }
+    return null;
+  };
+
+  const bedrooms = unit?.jumlah_kamar || 3;
+  const bathrooms = getFasilitasCount('mandi') || 2;
+  const hasParking = unit?.fasilitas?.some((f: string) => f.toLowerCase().includes('park')) || true;
+  
+  const priceRaw = unit?.price || 650000;
+  let priceStr = priceRaw >= 1000000 ? `${priceRaw / 1000000}M` : `${priceRaw / 1000}K`;
+
+  // Tentukan gambar background dinamis
+  let bgImageDesktop = "/images/hero/heroBanner.png";
+  let bgImageMobile = "/images/hero/heroBannerMobile.png";
+
+  if (unit?.images && unit.images.length > 0) {
+    const firstImg = unit.images[0];
+    const isBase64 = firstImg.length > 200 && !firstImg.startsWith('http');
+    const formattedImg = (isBase64 && !firstImg.startsWith('data:')) 
+        ? `data:image/png;base64,${firstImg}` : firstImg;
+    bgImageDesktop = formattedImg;
+    bgImageMobile = formattedImg;
+  }
+
   return (
     <section id="home" className="relative min-h-screen overflow-hidden">
       <div className="absolute inset-0 z-10">
         {/* Mobile & Tablet */}
-        <div className="block md:hidden w-full h-full">
+        <div className="relative block md:hidden w-full h-full">
           <Image
-            src="/images/hero/heroBannerMobile.png"
+            src={bgImageMobile}
             alt="Interior Background"
             fill
             priority
@@ -18,9 +68,9 @@ export default function HeroSection() {
         </div>
 
         {/* Desktop */}
-        <div className="hidden md:block w-full h-full">
+        <div className="relative hidden md:block w-full h-full">
           <Image
-            src="/images/hero/heroBanner.png"
+            src={bgImageDesktop}
             alt="Hero Image"
             fill
             priority
@@ -50,7 +100,7 @@ export default function HeroSection() {
 
           <div className="flex flex-col xs:flex-row items-start justify-start gap-4">
             <Link
-              href="/properties/kelarisan-villa"
+              href={unit ? `/properties/${unit.unit_id}` : `/properties/kelarisan-villa`}
               className="px-8 py-4 bg-primary border border-primary text-white font-semibold rounded-full hover:bg-white hover:text-primary duration-300"
             >
               Book Now
@@ -88,7 +138,7 @@ export default function HeroSection() {
               className='hidden dark:block'
               unoptimized={true}
             />
-            <p className="text-sm sm:text-base">3 Bedrooms</p>
+            <p className="text-sm sm:text-base">{bedrooms} Bedrooms</p>
           </div>
 
           <div className="flex flex-col items-center gap-3">
@@ -108,7 +158,7 @@ export default function HeroSection() {
               className='hidden dark:block'
               unoptimized={true}
             />
-            <p className="text-sm sm:text-base">2 Bathrooms</p>
+            <p className="text-sm sm:text-base">{bathrooms} Bathrooms</p>
           </div>
 
           <div className="flex flex-col items-center gap-3">
@@ -128,12 +178,12 @@ export default function HeroSection() {
               className='hidden dark:block'
               unoptimized={true}
             />
-            <p className="text-sm sm:text-base">Parking Space</p>
+            <p className="text-sm sm:text-base">{hasParking ? "Parking Space" : "No Parking"}</p>
           </div>
 
           <div className="flex flex-col items-center gap-3">
             <p className="text-xl sm:text-3xl font-medium">
-              650K / Day
+              {priceStr} / Day
             </p>
             <p className="text-sm sm:text-base opacity-60">
               For selling price

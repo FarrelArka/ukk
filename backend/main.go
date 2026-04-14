@@ -17,9 +17,19 @@ func main() {
 
 	r := gin.Default()
 
-	// 🌐 CORS - konfigurasi untuk menerima credentials dari origin frontend
+	// =========================
+	// 🌐 CORS (FIX TOTAL)
+	// =========================
 	r.Use(cors.New(cors.Config{
-		AllowAllOrigins: true,
+		AllowOrigins: []string{
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"http://localhost:5173",
+			"http://localhost:5500",
+			"http://127.0.0.1:3000",
+			"http://127.0.0.1:5173",
+		},
+
 		AllowMethods: []string{
 			"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS",
 		},

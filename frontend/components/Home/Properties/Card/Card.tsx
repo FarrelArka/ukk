@@ -9,17 +9,16 @@ const PropertyCard: React.FC<{ item: PropertyHomes }> = ({ item }) => {
   const mainImage = images[0]?.src;
 
   return (
-    <div>
-      <div className='relative rounded-2xl border border-dark/10 dark:border-white/10 group hover:shadow-3xl duration-300 dark:hover:shadow-white/20'>
-        <div className='overflow-hidden rounded-t-2xl'>
+    <div className='h-full'>
+      <div className='h-full flex flex-col relative rounded-2xl border border-dark/10 dark:border-white/10 group hover:shadow-3xl duration-300 dark:hover:shadow-white/20'>
+        <div className='relative overflow-hidden rounded-t-2xl aspect-[4/3]'>
           <Link href={`/properties/${slug}`}>
             {mainImage && (
               <Image
                 src={mainImage}
                 alt={name}
-                width={440}
-                height={300}
-                className='w-full rounded-t-2xl group-hover:brightness-50 group-hover:scale-125 transition duration-300 delay-75'
+                fill
+                className='object-cover rounded-t-2xl group-hover:brightness-50 group-hover:scale-125 transition duration-300 delay-75'
                 unoptimized={true}
               />
             )}
@@ -33,7 +32,7 @@ const PropertyCard: React.FC<{ item: PropertyHomes }> = ({ item }) => {
             />
           </div>
         </div>
-        <div className='p-6'>
+        <div className='p-6 flex-grow flex flex-col'>
           <div className='flex flex-col mobile:flex-row gap-5 mobile:gap-0 justify-between mb-6'>
             <div>
               <Link href={`/properties/${slug}`}>
@@ -51,7 +50,7 @@ const PropertyCard: React.FC<{ item: PropertyHomes }> = ({ item }) => {
               </button>
             </div>
           </div>
-          <div className='flex'>
+          <div className='mt-auto flex'>
             <div className='flex flex-col gap-2 border-e border-black/10 dark:border-white/20 pr-2 xs:pr-4 mobile:pr-8'>
               <Icon icon={'solar:bed-linear'} width={20} height={20} />
               <p className='text-sm mobile:text-base font-normal text-black dark:text-white'>
