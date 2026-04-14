@@ -40,7 +40,7 @@ func CreatePayment(c *gin.Context) {
 	// cek booking
 	var status string
 	err := config.DB.QueryRow(`
-		SELECT status_booking FROM booking WHERE id_booking=$1
+		SELECT status_booking FROM booking WHERE id_booking=?
 	`, req.BookingID).Scan(&status)
 
 	if err != nil {
@@ -54,17 +54,18 @@ func CreatePayment(c *gin.Context) {
 	}
 
 	// insert payment
-	var paymentID int
-	err = config.DB.QueryRow(`
+	res, err := config.DB.Exec(`
 		INSERT INTO payment (booking_id, amount, status_payment)
-		VALUES ($1,$2,'pending')
-		RETURNING payment_id
-	`, req.BookingID, req.Amount).Scan(&paymentID)
+		VALUES (?,?,'pending')
+	`, req.BookingID, req.Amount)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	id, _ := res.LastInsertId()
+	paymentID := int(id)
 
 	// 🔥 order_id unik
 	orderID := "ORDER-" + strconv.Itoa(paymentID) + "-" + strconv.FormatInt(time.Now().Unix(), 10)
@@ -117,15 +118,15 @@ func CreatePayment(c *gin.Context) {
 	// update payment simpan order_id & VA
 	_, _ = config.DB.Exec(`
 		UPDATE payment 
-		SET order_id=$1, va_number=$2 
-		WHERE payment_id=$3
+		SET order_id=?, va_number=? 
+		WHERE payment_id=?
 	`, orderID, vaNumber, paymentID)
 
 	// update booking
 	_, _ = config.DB.Exec(`
 		UPDATE booking 
 		SET status_booking='dp_pending' 
-		WHERE id_booking=$1
+		WHERE id_booking=?
 	`, req.BookingID)
 
 	c.JSON(http.StatusCreated, PaymentResponse{
@@ -168,8 +169,8 @@ func MidtransWebhook(c *gin.Context) {
 	// update payment
 	_, err := config.DB.Exec(`
 		UPDATE payment 
-		SET status_payment=$1 
-		WHERE order_id=$2
+		SET status_payment=? 
+		WHERE order_id=?
 	`, paymentStatus, orderID)
 
 	if err != nil {
@@ -183,7 +184,7 @@ func MidtransWebhook(c *gin.Context) {
 			UPDATE booking 
 			SET status_booking='dp_paid'
 			WHERE id_booking = (
-				SELECT booking_id FROM payment WHERE order_id=$1
+				SELECT booking_id FROM payment WHERE order_id=?
 			)
 		`, orderID)
 	}
@@ -200,7 +201,7 @@ func GetPaymentByBooking(c *gin.Context) {
 	row := config.DB.QueryRow(`
 		SELECT payment_id, booking_id, amount, status_payment, va_number
 		FROM payment
-		WHERE booking_id=$1
+		WHERE booking_id=?
 		ORDER BY payment_id DESC
 		LIMIT 1
 	`, bookingID)
@@ -240,8 +241,8 @@ func UpdatePaymentStatus(c *gin.Context) {
 
 	_, err := config.DB.Exec(`
 		UPDATE payment 
-		SET status_payment = $1 
-		WHERE payment_id = $2
+		SET status_payment = ? 
+		WHERE payment_id = ?
 	`, body.Status, body.PaymentID)
 
 	if err != nil {
@@ -255,7 +256,7 @@ func UpdatePaymentStatus(c *gin.Context) {
 			UPDATE booking 
 			SET status_booking = 'dp_paid'
 			WHERE id_booking = (
-				SELECT booking_id FROM payment WHERE payment_id = $1
+				SELECT booking_id FROM payment WHERE payment_id = ?
 			)
 		`, body.PaymentID)
 	}
@@ -281,7 +282,7 @@ func RefundPayment(c *gin.Context) {
 	err := config.DB.QueryRow(`
 		SELECT check_in 
 		FROM booking 
-		WHERE id_booking = $1
+		WHERE id_booking = ?
 	`, body.BookingID).Scan(&checkIn)
 
 	if err != nil {
@@ -289,7 +290,7 @@ func RefundPayment(c *gin.Context) {
 		return
 	}
 
-	diff := checkIn.Sub(time.Now()).Hours() / 24
+	diff := time.Until(checkIn).Hours() / 24
 	if diff < 7 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "refund only allowed before H-7"})
 		return
@@ -299,7 +300,7 @@ func RefundPayment(c *gin.Context) {
 	_, err = config.DB.Exec(`
 		UPDATE payment 
 		SET status_payment = 'refund' 
-		WHERE booking_id = $1
+		WHERE booking_id = ?
 	`, body.BookingID)
 
 	if err != nil {
@@ -311,7 +312,7 @@ func RefundPayment(c *gin.Context) {
 	_, _ = config.DB.Exec(`
 		UPDATE booking 
 		SET status_booking = 'refunded' 
-		WHERE id_booking = $1
+		WHERE id_booking = ?
 	`, body.BookingID)
 
 	c.JSON(http.StatusOK, gin.H{

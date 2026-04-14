@@ -77,7 +77,7 @@ func CreateBooking(c *gin.Context) {
 	// ========================
 	var hargaPerMalam float64
 	err = config.DB.QueryRow(
-		`SELECT price FROM unit_detail WHERE unit_id = $1`,
+		`SELECT price FROM unit_detail WHERE unit_id = ?`,
 		req.UnitID,
 	).Scan(&hargaPerMalam)
 
@@ -92,12 +92,10 @@ func CreateBooking(c *gin.Context) {
 	// ========================
 	// INSERT BOOKING
 	// ========================
-	var bookingID int
-	err = config.DB.QueryRow(`
+	res, err := config.DB.Exec(`
 		INSERT INTO booking 
 		(user_id, unit_id, check_in, check_out, jumlah_orang, status_booking, invoice_number, total_price)
-		VALUES ($1,$2,$3,$4,$5,'pending',$6,$7)
-		RETURNING id_booking
+		VALUES (?,?,?,?,?, 'pending', ?, ?)
 	`,
 		userID,
 		req.UnitID,
@@ -106,19 +104,22 @@ func CreateBooking(c *gin.Context) {
 		req.JumlahOrang,
 		invoice,
 		totalHarga,
-	).Scan(&bookingID)
+	)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	id, _ := res.LastInsertId()
+	bookingID := int(id)
+
 	// ========================
 	// AMBIL EMAIL USER
 	// ========================
 	var userEmail string
 	err = config.DB.QueryRow(
-		`SELECT email FROM users WHERE id_user = $1`,
+		`SELECT email FROM users WHERE id = ?`,
 		userID,
 	).Scan(&userEmail)
 
@@ -162,12 +163,12 @@ func GetMyBookings(c *gin.Context) {
 	rows, err := config.DB.Query(`
 		SELECT 
 			b.id_booking, COALESCE(b.unit_id, 0), 
-			COALESCE(CAST(b.check_in AS VARCHAR), ''), COALESCE(CAST(b.check_out AS VARCHAR), ''), 
+			COALESCE(CAST(b.check_in AS CHAR), ''), COALESCE(CAST(b.check_out AS CHAR), ''), 
 			COALESCE(b.jumlah_orang, 0), COALESCE(b.status_booking, ''), COALESCE(b.invoice_number, ''),
 			COALESCE(p.status_payment, 'unpaid'), COALESCE(p.amount, 0)
 		FROM booking b
 		LEFT JOIN payment p ON p.booking_id = b.id_booking
-		WHERE b.user_id = $1
+		WHERE b.user_id = ?
 		ORDER BY b.id_booking DESC
 	`, userID)
 
@@ -228,7 +229,7 @@ func GetAllBookings(c *gin.Context) {
 	rows, err := config.DB.Query(`
 		SELECT 
 			b.id_booking, COALESCE(b.user_id, 0), COALESCE(b.unit_id, 0), 
-			COALESCE(CAST(b.check_in AS VARCHAR), ''), COALESCE(CAST(b.check_out AS VARCHAR), ''),
+			COALESCE(CAST(b.check_in AS CHAR), ''), COALESCE(CAST(b.check_out AS CHAR), ''),
 			COALESCE(b.jumlah_orang, 0), COALESCE(b.status_booking, ''), COALESCE(b.invoice_number, ''),
 			COALESCE(p.status_payment, 'unpaid'), COALESCE(p.amount, 0),
 			COALESCE(u.name, 'Unknown User'),
@@ -236,7 +237,7 @@ func GetAllBookings(c *gin.Context) {
 			COALESCE(d.name, 'Unknown Unit')
 		FROM booking b
 		LEFT JOIN payment p ON p.booking_id = b.id_booking
-		LEFT JOIN users u ON u.id_user = b.user_id
+		LEFT JOIN users u ON u.id = b.user_id
 		LEFT JOIN unit_detail d ON d.unit_id = b.unit_id
 		ORDER BY b.id_booking DESC
 	`)
@@ -311,8 +312,8 @@ func UpdateBookingStatus(c *gin.Context) {
 
 	_, err := config.DB.Exec(`
 		UPDATE booking
-		SET status_booking = $1
-		WHERE id_booking = $2
+		SET status_booking = ?
+		WHERE id_booking = ?
 	`, body.Status, bookingID)
 
 	if err != nil {
@@ -340,7 +341,7 @@ func CancelBooking(c *gin.Context) {
 		SELECT b.check_in, COALESCE(b.status_booking, ''), COALESCE(p.status_payment, 'unpaid')
 		FROM booking b
 		LEFT JOIN payment p ON p.booking_id = b.id_booking
-		WHERE b.id_booking = $1 AND b.user_id = $2
+		WHERE b.id_booking = ? AND b.user_id = ?
 	`, bookingID, userID).Scan(&checkIn, &status, &paymentStatus)
 
 	if err != nil {
@@ -368,7 +369,7 @@ func CancelBooking(c *gin.Context) {
 	_, err = config.DB.Exec(`
 		UPDATE booking
 		SET status_booking = 'cancelled'
-		WHERE id_booking = $1
+		WHERE id_booking = ?
 	`, bookingID)
 
 	if err != nil {
@@ -380,7 +381,7 @@ func CancelBooking(c *gin.Context) {
 	_, err = config.DB.Exec(`
 		UPDATE payment
 		SET status_payment = 'refunded'
-		WHERE booking_id = $1
+		WHERE booking_id = ?
 	`, bookingID)
 
 	if err != nil {
@@ -421,13 +422,13 @@ func GetBookingByID(c *gin.Context) {
 	err = config.DB.QueryRow(`
 		SELECT 
 			b.id_booking, COALESCE(b.user_id, 0), COALESCE(b.unit_id, 0),
-			COALESCE(CAST(b.check_in AS VARCHAR), ''), COALESCE(CAST(b.check_out AS VARCHAR), ''),
+			COALESCE(CAST(b.check_in AS CHAR), ''), COALESCE(CAST(b.check_out AS CHAR), ''),
 			COALESCE(b.jumlah_orang, 0), COALESCE(b.status_booking, ''),
 			COALESCE(b.invoice_number, ''),
 			COALESCE(p.status_payment, 'unpaid'), COALESCE(p.amount, 0)
 		FROM booking b
 		LEFT JOIN payment p ON p.booking_id = b.id_booking
-		WHERE b.id_booking = $1
+		WHERE b.id_booking = ?
 	`, bookingID).Scan(
 		&data.IDBooking,
 		&data.UserID,
@@ -470,7 +471,7 @@ func ForceDeleteBooking(c *gin.Context) {
 
 	// hapus payment dulu (karena FK)
 	_, err = config.DB.Exec(`
-		DELETE FROM payment WHERE booking_id = $1
+		DELETE FROM payment WHERE booking_id = ?
 	`, bookingID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -479,7 +480,7 @@ func ForceDeleteBooking(c *gin.Context) {
 
 	// hapus booking
 	_, err = config.DB.Exec(`
-		DELETE FROM booking WHERE id_booking = $1
+		DELETE FROM booking WHERE id_booking = ?
 	`, bookingID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

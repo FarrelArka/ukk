@@ -6,8 +6,8 @@ import (
 	"log"
 	"os"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
-	_ "github.com/lib/pq"
 )
 
 var DB *sql.DB
@@ -24,14 +24,11 @@ func ConnectDB() {
 	user := os.Getenv("DB_USER")
 	password := os.Getenv("DB_PASSWORD")
 	dbname := os.Getenv("DB_NAME")
-	sslmode := os.Getenv("DB_SSLMODE")
 
-	connStr := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		host, port, user, password, dbname, sslmode,
-	)
+	// MySQL DSN format: username:password@tcp(host:port)/dbname?parseTime=true
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", user, password, host, port, dbname)
 
-	db, err := sql.Open("postgres", connStr)
+	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		panic(err)
 	}
@@ -41,6 +38,6 @@ func ConnectDB() {
 		panic(err)
 	}
 
-	fmt.Println("Database connected (ENV)")
+	fmt.Println("Database connected (MySQL)")
 	DB = db
 }
