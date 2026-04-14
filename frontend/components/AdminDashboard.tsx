@@ -587,20 +587,19 @@ export default function AdminDashboard({ defaultMenu = 'dashboard' }: { defaultM
     // Build map: dateKey -> list of unit names booked
     const bookedMap: Record<string, string[]> = {};
     bookings.forEach(booking => {
-      // API returns 'confirmed' and 'pending' statuses
-      if (booking.status === 'confirmed' || booking.status === 'pending') {
+      // Include all valid booking statuses
+      const validStatuses = ['confirmed', 'pending', 'paid', 'sukses', 'completed'];
+      if (validStatuses.includes(booking.status?.toLowerCase())) {
         const checkIn = new Date(booking.checkIn);
         const checkOut = new Date(booking.checkOut);
         
         const current = new Date(checkIn);
         while (current <= checkOut) {
-          // Only highlight if the date being processed is today or in the future
-          if (current >= today) {
-            const dateStr = current.toISOString().split('T')[0];
-            if (!bookedMap[dateStr]) bookedMap[dateStr] = [];
-            if (!bookedMap[dateStr].includes(booking.unit)) {
-              bookedMap[dateStr].push(booking.unit);
-            }
+          // Show all dates in the calendar, including past bookings
+          const dateStr = current.toISOString().split('T')[0];
+          if (!bookedMap[dateStr]) bookedMap[dateStr] = [];
+          if (!bookedMap[dateStr].includes(booking.unit)) {
+            bookedMap[dateStr].push(booking.unit);
           }
           current.setDate(current.getDate() + 1);
         }
