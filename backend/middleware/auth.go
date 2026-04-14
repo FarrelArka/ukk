@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -13,17 +14,24 @@ func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		jwtKey := []byte(os.Getenv("JWT_SECRET"))
 
-		tokenString, err := c.Cookie("cookie")
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "token tidak ada"})
-			c.Abort()
-			return
+		var tokenString string
+
+		// 🔥 PRIORITAS: HEADER BEARER
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+			tokenString = strings.TrimPrefix(authHeader, "Bearer ")
+		} else {
+			// fallback ke cookie
+			cookie, err := c.Cookie("cookie")
+			if err != nil {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "token tidak ada"})
+				c.Abort()
+				return
+			}
+			tokenString = cookie
 		}
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, http.ErrAbortHandler
-			}
 			return jwtKey, nil
 		})
 
@@ -33,22 +41,16 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token claims"})
-			c.Abort()
-			return
-		}
+		claims := token.Claims.(jwt.MapClaims)
 
-		userID := claims["user_id"]
-		role := claims["role"]
+		// 🔥 FIX TYPE
+		userID := int(claims["user_id"].(float64))
 
-		// DEBUG LOG
-		fmt.Printf("AuthMiddleware: role found in token: %v\n", role)
+		fmt.Println("AuthMiddleware: user_id =", userID)
 
 		c.Set("user_id", userID)
 		c.Set("email", claims["email"])
-		c.Set("role", role)
+		c.Set("role", claims["role"])
 
 		c.Next()
 	}

@@ -1,10 +1,10 @@
 package handlers
 
 import (
+	"fmt"
+	"github.com/gin-gonic/gin"
 	"go-backend-basic/config"
 	"net/http"
-
-	"github.com/gin-gonic/gin"
 )
 
 type TestimonialRequest struct {
@@ -21,7 +21,6 @@ func autoMigrateTestimonial() {
 }
 
 func CreateTestimonial(c *gin.Context) {
-	autoMigrateTestimonial()
 	var req TestimonialRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -31,25 +30,38 @@ func CreateTestimonial(c *gin.Context) {
 
 	userID := c.GetInt("user_id")
 
-	var status string
-	queryCheck := `
-	SELECT status
-	FROM booking
-	WHERE id_booking=? AND user_id=?
-	`
-	err := config.DB.QueryRow(queryCheck, req.BookingID, userID).Scan(&status)
-	if err != nil {
-		c.JSON(404, gin.H{"error": "booking tidak ditemukan"})
+	fmt.Println("BookingID:", req.BookingID)
+	fmt.Println("UserID:", userID)
+
+	if userID == 0 {
+		c.JSON(401, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	if status != "completed" {
+	var status string
+	queryCheck := `
+	SELECT status_booking
+	FROM booking
+	WHERE id_booking=? AND user_id=?
+	`
+
+	err := config.DB.QueryRow(queryCheck, req.BookingID, userID).Scan(&status)
+
+	if err != nil {
+		c.JSON(404, gin.H{
+			"error": "booking tidak ditemukan atau bukan milik user",
+		})
+		return
+	}
+
+	// 🔥 FIX DI SINI
+	if status != "sukses" {
 		c.JSON(403, gin.H{"error": "testimoni hanya bisa setelah checkout"})
 		return
 	}
 
 	var exists bool
-	checkReview := `SELECT EXISTS(SELECT 1 FROM testimonial WHERE booking_id=?)`
+	checkReview := `SELECT EXISTS(SELECT 1 FROM testimonial WHERE id_booking=?)`
 	config.DB.QueryRow(checkReview, req.BookingID).Scan(&exists)
 
 	if exists {
@@ -58,13 +70,20 @@ func CreateTestimonial(c *gin.Context) {
 	}
 
 	queryInsert := `
-	INSERT INTO testimonial
-	(booking_id,rating,comment,status)
-	VALUES (?,?,?,'active')
-	`
-	_, err = config.DB.Exec(queryInsert, req.BookingID, req.Rating, req.Comment)
+INSERT INTO testimonial (id_booking, id_user, rating, comment, status)
+VALUES (?, ?, ?, ?, 'active')
+`
+
+	_, err = config.DB.Exec(
+		queryInsert,
+		req.BookingID,
+		userID, // 🔥 INI YANG KURANG
+		req.Rating,
+		req.Comment,
+	)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "failed create testimonial"})
+		fmt.Println("INSERT ERROR:", err)
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 

@@ -15,16 +15,18 @@ import (
 )
 
 type CreatePaymentRequest struct {
-	BookingID int     `json:"booking_id"`
-	Amount    float64 `json:"amount"`
+	BookingID   int     `json:"booking_id"`
+	Amount      float64 `json:"amount"`
+	PaymentType string  `json:"payment_type"` // "qris" or "bank_transfer"
 }
 
 type PaymentResponse struct {
 	PaymentID   int    `json:"payment_id"`
 	BookingID   int    `json:"booking_id"`
-	VANumber    string `json:"va_number"`
+	VANumber    string `json:"va_number,omitempty"`
 	PaymentType string `json:"payment_type"`
 	Status      string `json:"status"`
+	QRUrl       string `json:"qr_url,omitempty"`
 }
 
 // ========================
@@ -73,17 +75,28 @@ func CreatePayment(c *gin.Context) {
 	// ========================
 	// MIDTRANS CORE API
 	// ========================
-	serverKey := os.Getenv("MIDTRANS_SERVER_KEY")
+	serverKey := os.Getenv("SERVER_KEY")
 
-	payload := map[string]interface{}{
-		"payment_type": "bank_transfer",
-		"transaction_details": map[string]interface{}{
-			"order_id":     orderID,
-			"gross_amount": req.Amount,
-		},
-		"bank_transfer": map[string]interface{}{
-			"bank": "bca",
-		},
+	var payload map[string]interface{}
+	if req.PaymentType == "qris" {
+		payload = map[string]interface{}{
+			"payment_type": "gopay",
+			"transaction_details": map[string]interface{}{
+				"order_id":     orderID,
+				"gross_amount": req.Amount,
+			},
+		}
+	} else {
+		payload = map[string]interface{}{
+			"payment_type": "bank_transfer",
+			"transaction_details": map[string]interface{}{
+				"order_id":     orderID,
+				"gross_amount": req.Amount,
+			},
+			"bank_transfer": map[string]interface{}{
+				"bank": "bca",
+			},
+		}
 	}
 
 	jsonData, _ := json.Marshal(payload)
@@ -108,11 +121,27 @@ func CreatePayment(c *gin.Context) {
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
 
-	// ambil VA
+	// ambil VA atau QR
 	vaNumber := ""
 	if vaArr, ok := result["va_numbers"].([]interface{}); ok {
 		va := vaArr[0].(map[string]interface{})
 		vaNumber = va["va_number"].(string)
+	}
+
+	qrUrl := ""
+	if actions, ok := result["actions"].([]interface{}); ok {
+		for _, actionRaw := range actions {
+			action := actionRaw.(map[string]interface{})
+			if action["name"] == "generate-qr-code" {
+				qrUrl = action["url"].(string)
+			}
+		}
+	}
+
+	if req.PaymentType == "qris" && qrUrl == "" {
+		// Log the error to terminal to make debugging easier if Midtrans rejects it
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "gagal mendapatkan QR dari Midtrans", "midtrans_response": result})
+		return
 	}
 
 	// update payment simpan order_id & VA
@@ -133,8 +162,9 @@ func CreatePayment(c *gin.Context) {
 		PaymentID:   paymentID,
 		BookingID:   req.BookingID,
 		VANumber:    vaNumber,
-		PaymentType: "bank_transfer",
+		PaymentType: req.PaymentType,
 		Status:      "pending",
+		QRUrl:       qrUrl,
 	})
 }
 
@@ -182,7 +212,7 @@ func MidtransWebhook(c *gin.Context) {
 	if paymentStatus == "paid" {
 		_, _ = config.DB.Exec(`
 			UPDATE booking 
-			SET status_booking='dp_paid'
+			SET status_booking='paid'
 			WHERE id_booking = (
 				SELECT booking_id FROM payment WHERE order_id=?
 			)
@@ -254,7 +284,7 @@ func UpdatePaymentStatus(c *gin.Context) {
 	if body.Status == "settlement" {
 		_, _ = config.DB.Exec(`
 			UPDATE booking 
-			SET status_booking = 'dp_paid'
+			SET status_booking = 'paid'
 			WHERE id_booking = (
 				SELECT booking_id FROM payment WHERE payment_id = ?
 			)
