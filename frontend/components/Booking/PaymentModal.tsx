@@ -19,16 +19,18 @@ interface PaymentModalProps {
     };
     onPaymentComplete: () => void;
     propertyImage?: string;
+    bookingId?: number | null;
 }
 
 type PaymentMethod = 'qris' | 'bank' | 'card' | null;
 type PaymentStep = 'confirmation' | 'qris_payment' | 'success';
 
-const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, propertyImage }: PaymentModalProps) => {
+const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, propertyImage, bookingId }: PaymentModalProps) => {
     const [step, setStep] = useState<PaymentStep>('confirmation');
     const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [timeLeft, setTimeLeft] = useState(60);
+    const [qrUrl, setQrUrl] = useState<string>('');
 
     const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
     if (isOpen !== prevIsOpen) {
@@ -56,19 +58,45 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
 
     if (!isOpen) return null;
 
-    const handleProceed = () => {
-        if (!selectedMethod) return;
+    const handleProceed = async () => {
+        if (!selectedMethod || !bookingId) return;
 
         setIsProcessing(true);
-        // Simulate payment processing
-        setTimeout(() => {
+        try {
+            const rawPriceStr = bookingDetails.totalPrice || bookingDetails.price || "0";
+            const rawAmount = parseFloat(rawPriceStr.replace(/[^0-9.-]+/g, "")) || 0;
+
+            const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5050"}/api/payment`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    booking_id: bookingId,
+                    amount: rawAmount,
+                    payment_type: selectedMethod // 'qris' or 'bank'
+                })
+            });
+
+            const data = await res.json();
             setIsProcessing(false);
+
+            if (!res.ok) {
+                alert("Payment error: " + (data.error || "Unknown"));
+                return;
+            }
+
             if (selectedMethod === 'qris') {
+                if (data.qr_url) {
+                    setQrUrl(data.qr_url);
+                }
                 setStep('qris_payment');
             } else {
-                setStep('success');
+                setStep('success'); // Untuk bank transfer kita set success untuk simulasi / lanjutkan alur
             }
-        }, 2000);
+        } catch (error) {
+            setIsProcessing(false);
+            alert("Error processing payment");
+        }
     };
 
     const handleClose = () => {
@@ -146,7 +174,7 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                                 {/* QR Code Image */}
                                 <div className="w-64 h-64 bg-white p-4 border border-black/5 mx-auto relative group overflow-hidden">
                                     <Image
-                                        src="/images/payment/qris.png"
+                                        src={qrUrl || "/images/payment/qris.png"}
                                         alt="QRIS Code"
                                         fill
                                         style={{ objectFit: 'contain' }}

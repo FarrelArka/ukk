@@ -19,56 +19,56 @@ const Signin = ({ signInOpen }: { signInOpen?: (value: boolean) => void }) => {
   const [showPassword, setShowPassword] = useState(false);
 
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setLoading(true);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
-  try {
-    const res = await fetch("/api/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
-    });
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (!res.ok) {
-      throw new Error(data.error || "Login gagal");
-    }
-
-    toast.success("Login berhasil!");
-
-    // ✅ simpan token & role
-    if (data.token) {
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("role", data.user.role);
-    }
-
-    // ✅ redirect berdasarkan role
-    setTimeout(() => {
-      if (data.user?.role === "admin") {
-        window.location.href = "http://localhost:3001/";
-      } else {
-        window.location.href = "/";
+      if (!res.ok) {
+        throw new Error(data.error || "Login gagal");
       }
-    }, 1000);
 
-  } catch (err) {
-    toast.error("Email / password salah");
-  } finally {
-    setLoading(false);
-  }
-};
+      toast.success("Login berhasil!");
+
+      // ✅ simpan token & role
+      if (data.token) {
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("role", data.user.role);
+      }
+
+      // ✅ redirect berdasarkan role
+      setTimeout(() => {
+        if (data.user?.role === "admin") {
+          window.location.href = "/admin";
+        } else {
+          window.location.href = "/";
+        }
+      }, 1000);
+
+    } catch (err) {
+      toast.error("Email / password salah");
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <>
-    <div className="flex items-center justify-center gap-4 mb-10">
-      <Logo />
-      <h3 className="text-4xl sm:text-[52px] font-medium tracking-tighter text-black dark:text-white leading-10 sm:leading-[56px]">
-        Manembah
-      </h3>
-    </div>
+      <div className="flex items-center justify-center gap-4 mb-10">
+        <Logo />
+        <h3 className="text-4xl sm:text-[52px] font-medium tracking-tighter text-black dark:text-white leading-10 sm:leading-[56px]">
+          Manembah
+        </h3>
+      </div>
 
 
       <SocialSignIn />
@@ -87,7 +87,7 @@ const handleSubmit = async (e: React.FormEvent) => {
           <label
             htmlFor="email"
             className="mb-1 sm:mb-2 block text-sm sm:text-base font-medium text-dark dark:text-white"
-            >
+          >
             Email Address
           </label>
           <input
@@ -99,13 +99,13 @@ const handleSubmit = async (e: React.FormEvent) => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
-            className="w-full rounded-xl sm:rounded-2xl border border-black/10 dark:border-white/20 bg-transparent px-4 sm:px-5 py-3 text-sm sm:text-base text-dark dark:text-white placeholder:text-gray-400 outline-none transition focus:border-primary focus-visible:shadow-none dark:focus:border-primary"/>
+            className="w-full rounded-xl sm:rounded-2xl border border-black/10 dark:border-white/20 bg-transparent px-4 sm:px-5 py-3 text-sm sm:text-base text-dark dark:text-white placeholder:text-gray-400 outline-none transition focus:border-primary focus-visible:shadow-none dark:focus:border-primary" />
         </div>
         <div className="mb-6 sm:mb-[22px]">
           <label
             htmlFor="password"
             className="mb-1 sm:mb-2 block text-sm sm:text-base font-medium text-dark dark:text-white"
-            >
+          >
             Password
           </label>
           <div className="relative">
@@ -118,7 +118,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
-              className="w-full rounded-xl sm:rounded-2xl border border-black/10 dark:border-white/20 bg-transparent px-4 sm:px-5 py-3 pr-12 text-sm sm:text-base text-dark dark:text-white placeholder:text-gray-400 outline-none transition focus:border-primary focus-visible:shadow-none dark:focus:border-primary"/>
+              className="w-full rounded-xl sm:rounded-2xl border border-black/10 dark:border-white/20 bg-transparent px-4 sm:px-5 py-3 pr-12 text-sm sm:text-base text-dark dark:text-white placeholder:text-gray-400 outline-none transition focus:border-primary focus-visible:shadow-none dark:focus:border-primary" />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}

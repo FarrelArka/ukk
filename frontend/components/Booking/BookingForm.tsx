@@ -32,6 +32,7 @@ const BookingForm = ({ initialUnitId = '', initialCategory = '', initialType = '
   const [capacity, setCapacity] = useState(initialCapacity);
   const [propertyImage, setPropertyImage] = useState<string | undefined>(undefined);
   const [bookedDates, setBookedDates] = useState<string[]>([]);
+  const [bookingId, setBookingId] = useState<number | null>(null);
 
   useEffect(() => {
     fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5050"}/api/profile`, {
@@ -92,9 +93,32 @@ const BookingForm = ({ initialUnitId = '', initialCategory = '', initialType = '
       .catch(() => { });
   }, [unitId]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsPaymentModalOpen(true);
+    if (!checkInDate || !checkOutDate) {
+      alert("Mohon pilih tanggal check-in dan check-out");
+      return;
+    }
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5050"}/api/booking`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          unit_id: parseInt(unitId),
+          check_in: checkInDate,
+          check_out: checkOutDate,
+          jumlah_orang: parseInt(guests) || 1
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal membuat booking");
+      
+      setBookingId(data.id_booking);
+      setIsPaymentModalOpen(true);
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    }
   };
 
   const handlePaymentComplete = () => {
@@ -399,6 +423,7 @@ const BookingForm = ({ initialUnitId = '', initialCategory = '', initialType = '
       <PaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
+        bookingId={bookingId}
         bookingDetails={{
           category: category,
           type: type,

@@ -212,7 +212,7 @@ export default function Details() {
                         <h3 className='text-xl font-medium'>Property details</h3>
                         <div className="py-8 my-8 border-y border-dark/10 dark:border-white/20 flex flex-col gap-8">
                             {item?.fasilitas && item.fasilitas.length > 0 && (
-                                <div className="flex flex-col gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {item.fasilitas.map((fas: string, index: number) => (
                                         <div key={index} className="flex items-center gap-4">
                                             <Icon icon="ph:check-circle" className="text-xl text-primary flex-shrink-0" />

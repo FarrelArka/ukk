@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"go-backend-basic/config"
-	"go-backend-basic/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -102,7 +101,7 @@ func CreateBooking(c *gin.Context) {
 	res, err := config.DB.Exec(`
 		INSERT INTO booking 
 		(user_id, unit_id, check_in, check_out, jumlah_orang, status_booking, invoice_number, total_price)
-		VALUES (?,?,?,?,?, 'paid', ?, ?)
+		VALUES (?,?,?,?,?, 'pending', ?, ?)
 	`,
 		userID,
 		req.UnitID,
@@ -122,48 +121,13 @@ func CreateBooking(c *gin.Context) {
 	bookingID := int(id)
 
 	// ========================
-	// LANGSUNG CATAT SEBAGAI LUNAS DI PAYMENT
-	// ========================
-	config.DB.Exec(`
-		INSERT INTO payment (booking_id, amount, status_payment)
-		VALUES (?, ?, 'paid')
-	`, bookingID, totalHarga)
-
-	// ========================
-	// AMBIL EMAIL USER
-	// ========================
-	var userEmail string
-	err = config.DB.QueryRow(
-		`SELECT email FROM users WHERE id = ?`,
-		userID,
-	).Scan(&userEmail)
-
-	if err != nil || userEmail == "" {
-		fmt.Println("Gagal ambil email user:", err)
-	} else {
-		body := services.BuildInvoiceEmail(
-			invoice,
-			"Unit Booking",
-			req.CheckIn,
-			req.CheckOut,
-		)
-
-		// kirim async
-		go func() {
-			if err := services.SendEmail(userEmail, "Invoice Booking - Sudah Bayar (Lunas)", body); err != nil {
-				fmt.Println("EMAIL ERROR:", err)
-			}
-		}()
-	}
-
-	// ========================
 	// RESPONSE
 	// ========================
 	c.JSON(http.StatusCreated, gin.H{
 		"message":     "booking created",
 		"id_booking":  bookingID,
 		"invoice":     invoice,
-		"status":      "paid",
+		"status":      "pending",
 		"total_price": totalHarga,
 	})
 }
