@@ -22,25 +22,17 @@ interface PaymentModalProps {
     bookingId?: number | null;
 }
 
-type PaymentMethod = 'qris' | 'bank' | 'card' | null;
-type PaymentStep = 'confirmation' | 'qris_payment' | 'bank_transfer' | 'card_payment' | 'success';
+type PaymentMethod = 'qris' | 'bank' | null;
+type PaymentStep = 'confirmation' | 'qris_payment' | 'bank_transfer' | 'success' | 'expired';
 
 const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, propertyImage, bookingId }: PaymentModalProps) => {
     const [step, setStep] = useState<PaymentStep>('confirmation');
     const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [timeLeft, setTimeLeft] = useState(60);
-    const [qrUrl, setQrUrl] = useState<string>('');
+    const [paymentReference, setPaymentReference] = useState<string>('');
     const [vaNumber, setVaNumber] = useState<string>('');
     const [copied, setCopied] = useState(false);
-
-    // Card details simulation
-    const [cardData, setCardData] = useState({
-        number: '',
-        expiry: '',
-        cvv: '',
-        name: ''
-    });
 
     const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
     if (isOpen !== prevIsOpen) {
@@ -50,23 +42,46 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
             setSelectedMethod(null);
             setIsProcessing(false);
             setTimeLeft(60);
-            setVaNumber('');
-            setCopied(false);
         }
     }
 
-    // Timer for QRIS payment
+    // Timer and Auto-Polling for QRIS payment
     React.useEffect(() => {
-        let timer: NodeJS.Timeout;
+        let timer: NodeJS.Timeout | undefined = undefined;
+        let pollTimer: NodeJS.Timeout | undefined = undefined;
+
         if (step === 'qris_payment' && timeLeft > 0) {
             timer = setInterval(() => {
                 setTimeLeft(prev => prev - 1);
             }, 1000);
+
+            // Poll backend to check if webhook has updated payment to paid
+            if (bookingId) {
+                pollTimer = setInterval(async () => {
+                    try {
+                        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5050"}/api/payment/${bookingId}`, {
+                            credentials: "include",
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.status === 'paid' || data.status === 'settlement' || data.status === 'success') {
+                                setStep('success');
+                            }
+                        }
+                    } catch (error) { }
+                }, 3000);
+            }
         } else if (step === 'qris_payment' && timeLeft === 0) {
-            setStep('success');
+            // Timer habis tanpa pembayaran = expired
+            setStep('expired');
+            clearInterval(pollTimer);
         }
-        return () => clearInterval(timer);
-    }, [step, timeLeft]);
+
+        return () => {
+            clearInterval(timer);
+            clearInterval(pollTimer);
+        };
+    }, [step, timeLeft, bookingId]);
 
     if (!isOpen) return null;
 
@@ -82,16 +97,16 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
         setIsProcessing(true);
         try {
             const rawPriceStr = bookingDetails.totalPrice || bookingDetails.price || "0";
-            const rawAmount = parseFloat(rawPriceStr.replace(/[^0-9.-]+/g, "")) || 0;
+            const rawAmount = parseFloat(rawPriceStr.replace(/[^0-9]+/g, "")) || 0;
 
-            const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5050"}/api/payment`, {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/payment`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
                 body: JSON.stringify({
                     booking_id: bookingId,
                     amount: rawAmount,
-                    payment_type: selectedMethod === 'bank' ? 'bank_transfer' : selectedMethod
+                    payment_type: selectedMethod === 'bank' ? 'bank_transfer' : selectedMethod // 'qris', 'bank_transfer', or 'card'
                 })
             });
 
@@ -104,15 +119,17 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
             }
 
             if (selectedMethod === 'qris') {
-                if (data.qr_url) {
-                    setQrUrl(data.qr_url);
+                if (data.qr_string) {
+                    setPaymentReference(data.qr_string);
+                } else if (data.transaction_id) {
+                    setPaymentReference(data.transaction_id);
+                } else if (data.order_id) {
+                    setPaymentReference(data.order_id); // fallback
                 }
                 setStep('qris_payment');
             } else if (selectedMethod === 'bank') {
                 setVaNumber(data.va_number || '123456789012');
                 setStep('bank_transfer');
-            } else if (selectedMethod === 'card') {
-                setStep('card_payment');
             }
         } catch (error) {
             setIsProcessing(false);
@@ -142,7 +159,7 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200 ">
             <div className={cn(
                 "bg-white dark:bg-dark w-full rounded-[18px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]",
-                (step === 'qris_payment' || step === 'bank_transfer' || step === 'card_payment') ? "max-w-md" : "max-w-2xl"
+                (step === 'qris_payment' || step === 'bank_transfer') ? "max-w-md" : "max-w-2xl"
             )}>
 
                 {/* Header */}
@@ -162,11 +179,16 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                             <h2 className="text-2xl font-semibold text-black dark:text-white mb-2">Bank Transfer</h2>
                             <p className="text-black/50 dark:text-white/50 text-sm">Transfer details for your booking</p>
                         </>
-                    ) : step === 'card_payment' ? (
-                        <>
-                            <h2 className="text-2xl font-semibold text-black dark:text-white mb-2">Card Payment</h2>
-                            <p className="text-black/50 dark:text-white/50 text-sm">Enter your card details</p>
-                        </>
+                    ) : step === 'expired' ? (
+                        <div className="pt-6">
+                            <div className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <Icon icon="ph:x-bold" className="text-white text-4xl" />
+                            </div>
+                            <h2 className="text-3xl font-semibold text-black dark:text-white mb-2">Payment Expired</h2>
+                            <p className="text-black/50 dark:text-white/50 text-sm max-w-sm mx-auto">
+                                Your payment session has timed out. Please try booking again.
+                            </p>
+                        </div>
                     ) : (
                         <div className="pt-6">
                             <div className="w-20 h-20 bg-[#008000] rounded-full flex items-center justify-center mx-auto mb-6">
@@ -202,9 +224,28 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                             <div className="py-4">
                                 <h4 className="text-xl font-bold tracking-wider text-black dark:text-white mb-4">SCAN TO BOOK</h4>
                                 <div className="w-64 h-64 bg-white p-4 border border-black/5 mx-auto relative group overflow-hidden">
-                                    <Image src={qrUrl || "/images/payment/qris.png"} alt="QRIS Code" fill style={{ objectFit: 'contain' }} />
+                                    <Image
+                                        src={paymentReference ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${paymentReference}` : "/images/payment/qris.png"}
+                                        alt="QRIS Code"
+                                        fill
+                                        style={{ objectFit: 'contain' }}
+                                        className=""
+                                        unoptimized={true}
+                                    />
+                                    {/* Scanning line animation */}
                                     <div className="absolute top-0 left-0 w-full h-1 bg-primary/60 shadow-[0_0_15px_rgba(176,145,79,0.8)] animate-scan z-10" />
                                 </div>
+
+                                {/* Payment Reference UI */}
+                                {/* <div className="mt-6 flex flex-col items-center">
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-black/50 dark:text-white/50 mb-1">Payment Reference ID</p>
+                                    <div className="bg-black/5 dark:bg-white/5 px-4 py-2 rounded-lg border border-black/10 dark:border-white/10 select-all font-mono font-bold text-sm">
+                                        {paymentReference || "Awaiting Reference..."}
+                                    </div>
+                                    <p className="text-[10px] text-black/40 dark:text-white/40 mt-2 text-center max-w-xs">
+                                        Tip: Double-click to copy and paste this into Midtrans Sandbox Simulator
+                                    </p>
+                                </div> */}
                             </div>
                             <div className="space-y-3 pt-4">
                                 <div className="flex items-center gap-3 text-black/70 dark:text-white/70">
@@ -236,7 +277,7 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                                 <p className="text-sm text-black/50 dark:text-white/50">Virtual Account Number</p>
                                 <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-black/5">
                                     <span className="text-xl font-bold tracking-widest text-black dark:text-white">{vaNumber}</span>
-                                    <button 
+                                    <button
                                         onClick={() => handleCopy(vaNumber)}
                                         className="p-2 hover:bg-primary/10 rounded-xl transition-colors text-primary flex items-center gap-2"
                                     >
@@ -273,86 +314,27 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                         </div>
                     )}
 
-                    {step === 'card_payment' && (
-                        <div className="space-y-6">
-                            {/* Card Display */}
-                            <div className="relative w-full aspect-[1.6/1] bg-gradient-to-br from-gray-900 to-gray-700 rounded-2xl p-6 text-white overflow-hidden shadow-xl">
-                                <div className="absolute top-0 right-0 p-6">
-                                    <Icon icon="logos:visa" className="text-4xl" />
-                                </div>
-                                <div className="h-full flex flex-col justify-between relative z-10">
-                                    <div className="w-12 h-10 bg-yellow-400/80 rounded-lg" />
-                                    <div className="space-y-4">
-                                        <p className="text-xl tracking-[0.2em] font-mono">
-                                            {cardData.number || '•••• •••• •••• ••••'}
-                                        </p>
-                                        <div className="flex justify-between items-end">
-                                            <div>
-                                                <p className="text-[8px] uppercase opacity-60">Card Holder</p>
-                                                <p className="text-sm font-medium uppercase tracking-wider">{cardData.name || 'Your Name'}</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-[8px] uppercase opacity-60">Expires</p>
-                                                <p className="text-sm font-medium">{cardData.expiry || 'MM/YY'}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="absolute inset-0 bg-white/5 pointer-events-none" />
-                            </div>
-
-                            {/* Form Inputs */}
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-xs font-semibold text-black/50 dark:text-white/50 mb-1.5 block">CARD NUMBER</label>
-                                    <input 
-                                        type="text" 
-                                        placeholder="0000 0000 0000 0000"
-                                        className="w-full p-4 rounded-xl border border-black/10 dark:border-white/10 dark:bg-white/5 outline-none focus:border-primary transition-colors font-mono"
-                                        onChange={(e) => setCardData({...cardData, number: e.target.value.replace(/\W/gi, '').replace(/(.{4})/g, '$1 ').trim().slice(0, 19)})}
-                                        value={cardData.number}
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-xs font-semibold text-black/50 dark:text-white/50 mb-1.5 block">EXPIRY DATE</label>
-                                        <input 
-                                            type="text" 
-                                            placeholder="MM/YY"
-                                            className="w-full p-4 rounded-xl border border-black/10 dark:border-white/10 dark:bg-white/5 outline-none focus:border-primary transition-colors font-mono"
-                                            onChange={(e) => setCardData({...cardData, expiry: e.target.value.replace(/[^\d/]/g, '').slice(0, 5)})}
-                                            value={cardData.expiry}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-semibold text-black/50 dark:text-white/50 mb-1.5 block">CVC/CVV</label>
-                                        <input 
-                                            type="password" 
-                                            placeholder="•••"
-                                            className="w-full p-4 rounded-xl border border-black/10 dark:border-white/10 dark:bg-white/5 outline-none focus:border-primary transition-colors font-mono"
-                                            onChange={(e) => setCardData({...cardData, cvv: e.target.value.replace(/\D/g, '').slice(0, 3)})}
-                                            value={cardData.cvv}
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-xs font-semibold text-black/50 dark:text-white/50 mb-1.5 block">CARDHOLDER NAME</label>
-                                    <input 
-                                        type="text" 
-                                        placeholder="Full Name"
-                                        className="w-full p-4 rounded-xl border border-black/10 dark:border-white/10 dark:bg-white/5 outline-none focus:border-primary transition-colors uppercase"
-                                        onChange={(e) => setCardData({...cardData, name: e.target.value})}
-                                        value={cardData.name}
-                                    />
-                                </div>
-                            </div>
-
+                    {step === 'expired' && (
+                        <div className="flex flex-col items-center text-center space-y-6 py-8">
+                            <p className="text-black/60 dark:text-white/60">
+                                The payment window has expired. Your booking has not been charged.
+                            </p>
                             <button
-                                onClick={handleConfirmSimulation}
-                                disabled={isProcessing || !cardData.number || !cardData.cvv}
-                                className="w-full py-4 bg-primary text-white rounded-full font-bold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                                onClick={() => {
+                                    setStep('confirmation');
+                                    setSelectedMethod(null);
+                                    setTimeLeft(60);
+                                    setPaymentReference('');
+                                }}
+                                className="px-8 py-4 bg-primary text-white rounded-full font-semibold hover:bg-primary/90 transition-colors"
                             >
-                                {isProcessing ? <Icon icon="ph:spinner" className="animate-spin text-xl" /> : "Pay Now"}
+                                Try Again
+                            </button>
+                            <button
+                                onClick={handleClose}
+                                className="text-black/50 dark:text-white/50 hover:text-black dark:hover:text-white transition-colors text-sm"
+                            >
+                                Cancel Booking
                             </button>
                         </div>
                     )}
@@ -464,23 +446,6 @@ const PaymentModal = ({ isOpen, onClose, bookingDetails, onPaymentComplete, prop
                                             <div className="text-center">
                                                 <p className="font-medium text-black dark:text-white">Bank Transfer</p>
                                                 <p className="text-xs text-black/50 dark:text-white/50">BCA Virtual Account</p>
-                                            </div>
-                                        </div>
-
-                                        {/* Credit Card */}
-                                        <div
-                                            className={cn(
-                                                "border rounded-2xl p-4 flex flex-col items-center justify-center gap-4 cursor-pointer transition-all duration-200 hover:border-primary/50 h-48",
-                                                selectedMethod === 'card' ? "border-primary ring-1 ring-primary bg-primary/5" : "border-black/10 dark:border-white/10"
-                                            )}
-                                            onClick={() => setSelectedMethod('card')}
-                                        >
-                                            <div className="flex items-center justify-center p-2">
-                                                <Image src="/images/payment/card.png" alt="Credit Card" width={120} height={40} className="object-contain" unoptimized={true} />
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="font-medium text-black dark:text-white">Credit / Debit Card</p>
-                                                <p className="text-xs text-black/50 dark:text-white/50">Visa / Mastercard</p>
                                             </div>
                                         </div>
                                     </div>

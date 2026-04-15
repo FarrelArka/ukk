@@ -8,7 +8,7 @@ import (
 	"os"
 	"strconv"
 	"time"
-
+	"fmt"
 	"go-backend-basic/config"
 
 	"github.com/gin-gonic/gin"
@@ -21,18 +21,28 @@ type CreatePaymentRequest struct {
 }
 
 type PaymentResponse struct {
-	PaymentID   int    `json:"payment_id"`
-	BookingID   int    `json:"booking_id"`
-	VANumber    string `json:"va_number,omitempty"`
-	PaymentType string `json:"payment_type"`
-	Status      string `json:"status"`
-	QRUrl       string `json:"qr_url,omitempty"`
+	PaymentID     int    `json:"payment_id"`
+	BookingID     int    `json:"booking_id"`
+	VANumber      string `json:"va_number,omitempty"`
+	PaymentType   string `json:"payment_type"`
+	Status        string `json:"status"`
+	DeeplinkUrl   string `json:"deeplink_url,omitempty"`
+	TransactionID string `json:"transaction_id,omitempty"`
+	OrderID       string `json:"order_id,omitempty"`
+	QRString      string `json:"qr_string,omitempty"`
+}
+
+func autoMigratePayment() {
+	// Memastikan kolom tambahan ada di table payment secara otomatis
+	config.DB.Exec(`ALTER TABLE payment ADD COLUMN transaction_id VARCHAR(255)`)
 }
 
 // ========================
 // CREATE PAYMENT (CORE API)
 // ========================
 func CreatePayment(c *gin.Context) {
+	autoMigratePayment()
+
 	var req CreatePaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -55,22 +65,21 @@ func CreatePayment(c *gin.Context) {
 		return
 	}
 
+	// 🔥 IMPORTANT FIX: order_id = booking_id (biar webhook gampang match)
+	orderID := strconv.Itoa(req.BookingID)
+
 	// insert payment
 	res, err := config.DB.Exec(`
-		INSERT INTO payment (booking_id, amount, status_payment)
-		VALUES (?,?,'pending')
-	`, req.BookingID, req.Amount)
+		INSERT INTO payment (booking_id, amount, status_payment, order_id)
+		VALUES (?, ?, 'pending', ?)
+	`, req.BookingID, req.Amount, orderID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	id, _ := res.LastInsertId()
-	paymentID := int(id)
-
-	// 🔥 order_id unik
-	orderID := "ORDER-" + strconv.Itoa(paymentID) + "-" + strconv.FormatInt(time.Now().Unix(), 10)
+	paymentID, _ := res.LastInsertId()
 
 	// ========================
 	// MIDTRANS CORE API
@@ -78,9 +87,10 @@ func CreatePayment(c *gin.Context) {
 	serverKey := os.Getenv("SERVER_KEY")
 
 	var payload map[string]interface{}
+
 	if req.PaymentType == "qris" {
 		payload = map[string]interface{}{
-			"payment_type": "gopay",
+			"payment_type": "qris",
 			"transaction_details": map[string]interface{}{
 				"order_id":     orderID,
 				"gross_amount": req.Amount,
@@ -121,50 +131,70 @@ func CreatePayment(c *gin.Context) {
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
 
-	// ambil VA atau QR
+	// ambil VA / QR / transaction id
 	vaNumber := ""
 	if vaArr, ok := result["va_numbers"].([]interface{}); ok {
-		va := vaArr[0].(map[string]interface{})
-		vaNumber = va["va_number"].(string)
-	}
-
-	qrUrl := ""
-	if actions, ok := result["actions"].([]interface{}); ok {
-		for _, actionRaw := range actions {
-			action := actionRaw.(map[string]interface{})
-			if action["name"] == "generate-qr-code" {
-				qrUrl = action["url"].(string)
+		if len(vaArr) > 0 {
+			if va, ok := vaArr[0].(map[string]interface{}); ok {
+				vaNumber, _ = va["va_number"].(string)
 			}
 		}
 	}
 
-	if req.PaymentType == "qris" && qrUrl == "" {
-		// Log the error to terminal to make debugging easier if Midtrans rejects it
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "gagal mendapatkan QR dari Midtrans", "midtrans_response": result})
+	transactionID := ""
+	if tid, ok := result["transaction_id"].(string); ok {
+		transactionID = tid
+	}
+
+	qrString := ""
+	if qs, ok := result["qr_string"].(string); ok {
+		qrString = qs
+	}
+
+	deeplinkUrl := ""
+	if actions, ok := result["actions"].([]interface{}); ok {
+		for _, a := range actions {
+			if m, ok := a.(map[string]interface{}); ok {
+				if m["name"] == "deeplink-redirect" {
+					deeplinkUrl, _ = m["url"].(string)
+				}
+			}
+		}
+	}
+
+	// QRIS validation
+	if req.PaymentType == "qris" && qrString == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":             "gagal mendapatkan transaksi dari Midtrans",
+			"midtrans_response": result,
+		})
 		return
 	}
 
-	// update payment simpan order_id & VA
+	// update payment (WAJIB pakai order_id + status pending)
 	_, _ = config.DB.Exec(`
 		UPDATE payment 
-		SET order_id=?, va_number=? 
+		SET order_id=?, va_number=?, transaction_id=?, status_payment='pending'
 		WHERE payment_id=?
-	`, orderID, vaNumber, paymentID)
+	`, orderID, vaNumber, transactionID, paymentID)
 
-	// update booking
+	// ❌ JANGAN set PAID di sini (INI YANG BIKIN BUG SEBELUMNYA)
 	_, _ = config.DB.Exec(`
 		UPDATE booking 
-		SET status_booking='dp_pending' 
+		SET status_booking='pending'
 		WHERE id_booking=?
 	`, req.BookingID)
 
 	c.JSON(http.StatusCreated, PaymentResponse{
-		PaymentID:   paymentID,
-		BookingID:   req.BookingID,
-		VANumber:    vaNumber,
-		PaymentType: req.PaymentType,
-		Status:      "pending",
-		QRUrl:       qrUrl,
+		PaymentID:     int(paymentID),
+		BookingID:     req.BookingID,
+		VANumber:      vaNumber,
+		PaymentType:   req.PaymentType,
+		Status:        "pending",
+		DeeplinkUrl:   deeplinkUrl,
+		TransactionID: transactionID,
+		OrderID:       orderID,
+		QRString:      qrString,
 	})
 }
 
@@ -172,64 +202,62 @@ func CreatePayment(c *gin.Context) {
 // WEBHOOK MIDTRANS
 // ========================
 func MidtransWebhook(c *gin.Context) {
+	fmt.Println("🔥 WEBHOOK HIT")
+
 	var notif map[string]interface{}
-	if err := c.ShouldBindJSON(&notif); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	_ = c.ShouldBindJSON(&notif)
+
+	orderID, _ := notif["order_id"].(string)
+	status, _ := notif["transaction_status"].(string)
+
+	bookingID, err := strconv.Atoi(orderID)
+	if err != nil {
+		c.JSON(200, gin.H{"ok": true})
 		return
 	}
 
-	orderID := notif["order_id"].(string)
-	status := notif["transaction_status"].(string)
-
-	// mapping status
 	var paymentStatus string
+
 	switch status {
-	case "settlement":
+	case "settlement", "capture":
 		paymentStatus = "paid"
 	case "pending":
 		paymentStatus = "pending"
 	case "expire":
 		paymentStatus = "expired"
-	case "cancel":
+	case "cancel", "deny":
 		paymentStatus = "cancelled"
 	default:
-		paymentStatus = status
+		paymentStatus = "pending"
 	}
 
 	// update payment
-	_, err := config.DB.Exec(`
+	_, _ = config.DB.Exec(`
 		UPDATE payment 
-		SET status_payment=? 
-		WHERE order_id=?
-	`, paymentStatus, orderID)
+		SET status_payment=?
+		WHERE booking_id=?
+	`, paymentStatus, bookingID)
 
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// update booking kalau paid
+	// update booking
 	if paymentStatus == "paid" {
 		_, _ = config.DB.Exec(`
 			UPDATE booking 
 			SET status_booking='paid'
-			WHERE id_booking = (
-				SELECT booking_id FROM payment WHERE order_id=?
-			)
-		`, orderID)
+			WHERE id_booking=?
+		`, bookingID)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "webhook received"})
+	c.JSON(200, gin.H{"ok": true})
 }
 
 // ========================
-// GET PAYMENT BY BOOKING
+// GET PAYMENT BY BOOKING (with live Midtrans status check)
 // ========================
 func GetPaymentByBooking(c *gin.Context) {
 	bookingID := c.Param("booking_id")
 
 	row := config.DB.QueryRow(`
-		SELECT payment_id, booking_id, amount, status_payment, va_number
+		SELECT payment_id, booking_id, amount, status_payment, COALESCE(va_number,''), COALESCE(order_id,'')
 		FROM payment
 		WHERE booking_id=?
 		ORDER BY payment_id DESC
@@ -238,12 +266,44 @@ func GetPaymentByBooking(c *gin.Context) {
 
 	var pID, bID int
 	var amount float64
-	var status, va string
+	var status, va, orderID string
 
-	err := row.Scan(&pID, &bID, &amount, &status, &va)
+	err := row.Scan(&pID, &bID, &amount, &status, &va, &orderID)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "payment not found"})
 		return
+	}
+
+	// If status is still pending AND we have an order_id, check Midtrans directly
+	if status == "pending" && orderID != "" {
+		serverKey := os.Getenv("SERVER_KEY")
+		midtransURL := "https://api.sandbox.midtrans.com/v2/" + orderID + "/status"
+
+		req, _ := http.NewRequest("GET", midtransURL, nil)
+		req.SetBasicAuth(serverKey, "")
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err == nil {
+			defer resp.Body.Close()
+			var result map[string]interface{}
+			json.NewDecoder(resp.Body).Decode(&result)
+
+			if txStatus, ok := result["transaction_status"].(string); ok {
+				if txStatus == "settlement" || txStatus == "capture" {
+					status = "paid"
+					// Update local DB
+					config.DB.Exec(`UPDATE payment SET status_payment='paid' WHERE payment_id=?`, pID)
+					config.DB.Exec(`UPDATE booking SET status_booking='paid' WHERE id_booking=?`, bID)
+				} else if txStatus == "expire" {
+					status = "expired"
+					config.DB.Exec(`UPDATE payment SET status_payment='expired' WHERE payment_id=?`, pID)
+				} else if txStatus == "cancel" || txStatus == "deny" {
+					status = "cancelled"
+					config.DB.Exec(`UPDATE payment SET status_payment='cancelled' WHERE payment_id=?`, pID)
+				}
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

@@ -54,9 +54,9 @@ func CreateTestimonial(c *gin.Context) {
 		return
 	}
 
-	// 🔥 FIX DI SINI
-	if status != "sukses" {
-		c.JSON(403, gin.H{"error": "testimoni hanya bisa setelah checkout"})
+	// Testimoni hanya bisa setelah payment atau checkout (status paid atau sukses)
+	if status != "sukses" && status != "paid" && status != "completed" {
+		c.JSON(403, gin.H{"error": "testimoni hanya bisa setelah pembayaran dikonfirmasi"})
 		return
 	}
 
@@ -100,7 +100,7 @@ func GetTestimonials(c *gin.Context) {
 		COALESCE(CAST(t.created_at AS CHAR), ''),
 		COALESCE(u.name, 'Unknown')
 	FROM testimonial t
-	JOIN booking b ON b.id_booking = t.booking_id
+	JOIN booking b ON b.id_booking = t.id_booking
 	JOIN users u ON u.id = b.user_id
 	WHERE t.status='active' OR t.status='approved'
 	ORDER BY t.created_at DESC
@@ -153,7 +153,7 @@ func GetAllTestimonialsAdmin(c *gin.Context) {
 			COALESCE(u.name, 'Unknown User') AS user_name,
 			COALESCE(d.name, 'Unknown Unit') AS unit_name
 		FROM testimonial t
-		LEFT JOIN booking b ON b.id_booking = t.booking_id
+		LEFT JOIN booking b ON b.id_booking = t.id_booking
 		LEFT JOIN users u ON u.id = b.user_id
 		LEFT JOIN unit_detail d ON d.unit_id = b.unit_id
 		ORDER BY t.created_at DESC
@@ -205,7 +205,7 @@ func GetTestimonialByID(c *gin.Context) {
 	row := config.DB.QueryRow(`
 		SELECT t.id_testimonial, COALESCE(b.user_id, 0), COALESCE(t.rating, 0), COALESCE(t.comment, ''), COALESCE(t.status, 'pending'), COALESCE(CAST(t.created_at AS CHAR), '')
 		FROM testimonial t
-		LEFT JOIN booking b ON b.id_booking = t.booking_id
+		LEFT JOIN booking b ON b.id_booking = t.id_booking
 		WHERE t.id_testimonial = ?
 	`, id)
 
@@ -300,4 +300,29 @@ func DeleteTestimonial(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"message": "testimonial berhasil dihapus"})
+}
+
+func GetTestimonialByBooking(c *gin.Context) {
+	bookingID := c.Param("booking_id")
+
+	row := config.DB.QueryRow(`
+		SELECT id_testimonial, rating, comment, status
+		FROM testimonial
+		WHERE id_booking = ?
+	`, bookingID)
+
+	var t struct {
+		ID      int     `json:"id"`
+		Rating  float64 `json:"rating"`
+		Comment string  `json:"comment"`
+		Status  string  `json:"status"`
+	}
+
+	err := row.Scan(&t.ID, &t.Rating, &t.Comment, &t.Status)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "testimonial not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, t)
 }

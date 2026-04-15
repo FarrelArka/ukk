@@ -36,7 +36,7 @@ func AdminDashboard(c *gin.Context) {
 			COALESCE(b.status_booking, 'pending')
 		FROM booking b
 		LEFT JOIN unit_detail d ON d.unit_id = b.unit_id
-		WHERE b.status_booking IN ('confirmed', 'pending')
+		WHERE b.status_booking IN ('confirmed', 'pending', 'paid', 'sukses', 'completed')
 	`)
 
 	var calendarBookings []gin.H

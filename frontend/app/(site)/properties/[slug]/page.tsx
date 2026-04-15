@@ -249,19 +249,25 @@ export default function Details() {
                                 {item?.rate}
                             </h4>
                             <p className='text-sm text-white/50 dark:text-white'>Discounted Price</p>
-                            <Link
-                                href={user
-                                    ? `/booking?unit_id=${encodeURIComponent(item?.slug || '')}
-                                        &category=${encodeURIComponent(item?.type || '')}
-                                        &type=${encodeURIComponent(item?.name || '')}
-                                        &price=${encodeURIComponent(item?.price || '')}
-                                        &capacity=${encodeURIComponent(item?.capacity || '')}`
-                                    : '/signup'
-                                }
+                            <button
+                                onClick={() => {
+                                    if (!user) {
+                                        window.location.href = '/signup';
+                                        return;
+                                    }
+                                    sessionStorage.setItem('bookingData', JSON.stringify({
+                                        unit_id: item?.slug || '',
+                                        category: item?.type || '',
+                                        type: item?.name || '',
+                                        price: item?.price || '',
+                                        capacity: item?.capacity || '',
+                                    }));
+                                    window.location.href = '/booking';
+                                }}
                                 className='py-4 px-8 bg-primary text-white rounded-full w-full block text-center hover:bg-white duration-300 text-base mt-8 hover:cursor-pointer hover:text-primary'
                             >
                                 Book Now
-                            </Link>
+                            </button>
                             <div className="absolute right-0 top-4 -z-[1]">
                                 <Image src="/images/properties/vector.svg" width={400} height={500} alt="vector" unoptimized={true} />
                             </div>

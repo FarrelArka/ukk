@@ -26,6 +26,7 @@ func ProtectedRoutes(r *gin.Engine) {
 		// ========================
 		auth.POST("/testimonial", handlers.CreateTestimonial)
 		auth.GET("/testimonial/:id", handlers.GetTestimonialByID)
+		auth.GET("/testimonial/booking/:booking_id", handlers.GetTestimonialByBooking)
 		auth.PUT("/testimonial/:id", handlers.UpdateTestimonial)
 
 		// ========================

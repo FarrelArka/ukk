@@ -144,9 +144,11 @@ func GetMyBookings(c *gin.Context) {
 			b.id_booking, COALESCE(b.unit_id, 0), 
 			COALESCE(CAST(b.check_in AS CHAR), ''), COALESCE(CAST(b.check_out AS CHAR), ''), 
 			COALESCE(b.jumlah_orang, 0), COALESCE(b.status_booking, ''), COALESCE(b.invoice_number, ''),
-			COALESCE(p.status_payment, 'unpaid'), COALESCE(p.amount, 0)
+			COALESCE(p.status_payment, 'unpaid'), COALESCE(p.amount, 0),
+			CASE WHEN t.id_testimonial IS NOT NULL THEN 1 ELSE 0 END as has_testimonial
 		FROM booking b
 		LEFT JOIN payment p ON p.booking_id = b.id_booking
+		LEFT JOIN testimonial t ON t.id_booking = b.id_booking
 		WHERE b.user_id = ?
 		ORDER BY b.id_booking DESC
 	`, userID)
@@ -158,21 +160,23 @@ func GetMyBookings(c *gin.Context) {
 	defer rows.Close()
 
 	type BookingResponse struct {
-		IDBooking   int     `json:"id_booking"`
-		UnitID      int     `json:"unit_id"`
-		CheckIn     string  `json:"check_in"`
-		CheckOut    string  `json:"check_out"`
-		JumlahOrang int     `json:"jumlah_orang"`
-		Status      string  `json:"status_booking"`
-		Invoice     string  `json:"invoice"`
-		Payment     string  `json:"payment_status"`
-		Amount      float64 `json:"amount"`
+		IDBooking      int     `json:"id_booking"`
+		UnitID         int     `json:"unit_id"`
+		CheckIn        string  `json:"check_in"`
+		CheckOut       string  `json:"check_out"`
+		JumlahOrang    int     `json:"jumlah_orang"`
+		Status         string  `json:"status_booking"`
+		Invoice        string  `json:"invoice"`
+		Payment        string  `json:"payment_status"`
+		Amount         float64 `json:"amount"`
+		HasTestimonial bool    `json:"has_testimonial"`
 	}
 
 	bookings := []BookingResponse{}
 
 	for rows.Next() {
 		var b BookingResponse
+		var hasTest int
 		err := rows.Scan(
 			&b.IDBooking,
 			&b.UnitID,
@@ -183,11 +187,13 @@ func GetMyBookings(c *gin.Context) {
 			&b.Invoice,
 			&b.Payment,
 			&b.Amount,
+			&hasTest,
 		)
 		if err != nil {
 			fmt.Println("Scan Error Get My Bookings:", err)
 			continue
 		}
+		b.HasTestimonial = hasTest == 1
 		if len(b.CheckIn) >= 10 {
 			b.CheckIn = b.CheckIn[:10]
 		}

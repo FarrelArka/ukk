@@ -23,4 +23,5 @@ func PublicRoutes(r *gin.Engine) {
 	r.GET("/accommodations", handlers.GetUnits)
 	r.GET("/testimonials", handlers.GetTestimonials)
 	r.GET("/bookings/unit/:unit_id/dates", handlers.GetBookedDatesByUnit)
+	r.POST("/api/webhook/midtrans", handlers.MidtransWebhook)
 }
